@@ -68,30 +68,16 @@ function unblockSlot(slotToUnblock) {
     blockedSlots = blockedSlots.filter(s => s.r !== r || s.c !== c);
     updateBoardView([], [], [], []);
 }
-
-// ALTERADO: Lógica de deleção com probabilidade
 function applyPunishmentDeletions(count, onCompleteCallback) {
     if (isInputLocked || currentEnemy.hp <= 0 || count <= 0) {
         if (onCompleteCallback) onCompleteCallback();
         return;
     }
-
     isInputLocked = true;
     let tilesToDelete = [];
-    
-    // Cria um "shadow board" para que múltiplas deleções no mesmo tick
-    // não tentem pegar a mesma peça.
     let tempBoard = JSON.parse(JSON.stringify(board)); 
-
     for (let i = 0; i < count; i++) {
-        // 1. Criar baldes de peças disponíveis
-        let buckets = {
-            low: [],    // 2, 4, 8
-            mid: [],    // 16, 32
-            high: [],   // 64, 128
-            epic: []    // 256+
-        };
-
+        let buckets = { low: [], mid: [], high: [], epic: [] };
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 const val = tempBoard[r][c];
@@ -104,48 +90,32 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
                 }
             }
         }
-        
-        // 2. Escolher um balde baseado na probabilidade
         const rand = Math.random();
         let chosenBucket;
-        if (rand < 0.70) { // 70%
-            chosenBucket = buckets.low;
-        } else if (rand < 0.85) { // 15%
-            chosenBucket = buckets.mid;
-        } else if (rand < 0.95) { // 10%
-            chosenBucket = buckets.high;
-        } else { // 5%
-            chosenBucket = buckets.epic;
-        }
+        if (rand < 0.70) { chosenBucket = buckets.low; }
+        else if (rand < 0.85) { chosenBucket = buckets.mid; }
+        else if (rand < 0.95) { chosenBucket = buckets.high; }
+        else { chosenBucket = buckets.epic; }
         
-        // 3. Lógica de Fallback: Se o balde escolhido estiver vazio, tenta o próximo mais comum
         if (chosenBucket.length === 0) {
             if (buckets.low.length > 0) chosenBucket = buckets.low;
             else if (buckets.mid.length > 0) chosenBucket = buckets.mid;
             else if (buckets.high.length > 0) chosenBucket = buckets.high;
             else if (buckets.epic.length > 0) chosenBucket = buckets.epic;
-            else break; // Não há mais peças para deletar
+            else break;
         }
-        
-        // 4. Escolher uma peça do balde
         let tileToPick = chosenBucket[Math.floor(Math.random() * chosenBucket.length)];
         tilesToDelete.push(tileToPick);
-        
-        // 5. Remove do "shadow board" para a próxima iteração
         tempBoard[tileToPick.r][tileToPick.c] = 0; 
     }
-
     if (tilesToDelete.length === 0) {
         isInputLocked = false;
         if (onCompleteCallback) onCompleteCallback();
         return;
     }
-    
     document.getElementById("game-board").classList.add("shake");
     updateBoardView([], [], tilesToDelete, []); 
-    
     setTimeout(() => {
-        // Agora, aplica as deleções no "true" board
         for (const tile of tilesToDelete) {
             if (board[tile.r][tile.c] > 0) {
                  board[tile.r][tile.c] = 0;
@@ -158,7 +128,6 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
         checkGameOver();
     }, 600);
 }
-
 
 // --- LÓGICA PRINCIPAL DO JOGO ---
 function restartGame() {
@@ -371,25 +340,33 @@ function processMove(slideResult, isFastMove) {
     }
 }
 
-// ALTERADO: Lógica de timestamp movida
+// ALTERADO: Lógica de input refatorada
 function handleKeyInput(e) {
-    // NOVO: Timestamp é atualizado AQUI
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
     lastMoveTimestamp = now;
-
     if (isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
         return;
     }
     
-    let slideResult = null;
+    let slideFn = null;
     switch(e.key) {
-        case "ArrowLeft": slideResult = slideLeft(); break;
-        case "ArrowRight": slideResult = slideRight(); break;
-        case "ArrowUp": slideResult = slideUp(); break;
-        case "ArrowDown": slideResult = slideDown(); break;
+        case "ArrowLeft": slideFn = slideLeft; break;
+        case "ArrowRight": slideFn = slideRight; break;
+        case "ArrowUp": slideFn = slideUp; break;
+        case "ArrowDown": slideFn = slideDown; break;
         default: return;
     }
+    
+    // 1. Simula o movimento
+    let slideResult = slideFn(board); // Passa o 'board' global
+    
+    // 2. Se for válido, atualiza o 'board' global
+    if (slideResult.hasChanged) {
+        board = slideResult.board;
+    }
+    
+    // 3. Processa o resultado
     processMove(slideResult, isFastMove);
 }
 
@@ -399,47 +376,51 @@ function handleTouchStart(e) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 }
-
-// ALTERADO: Lógica de timestamp movida
+// ALTERADO: Lógica de input refatorada
 function handleTouchEnd(e) {
     e.preventDefault();
-    
-    // NOVO: Timestamp é atualizado AQUI
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
     lastMoveTimestamp = now;
-    
     if (isInputLocked) return;
-    
     let touchEndX = e.changedTouches[0].clientX;
     let touchEndY = e.changedTouches[0].clientY;
-    
     handleSwipe(touchEndX, touchEndY, isFastMove);
 }
-
-// (handleSwipe - sem alterações)
+// ALTERADO: Lógica de input refatorada
 function handleSwipe(endX, endY, isFastMove) {
     let deltaX = endX - touchStartX;
     let deltaY = endY - touchStartY;
     let absDeltaX = Math.abs(deltaX);
     let absDeltaY = Math.abs(deltaY);
     const minSwipeDistance = 30;
-    let slideResult = null;
+    
+    let slideFn = null;
     if (absDeltaX > absDeltaY) {
         if (absDeltaX > minSwipeDistance) {
-            slideResult = (deltaX < 0) ? slideLeft() : slideRight();
+            slideFn = (deltaX < 0) ? slideLeft : slideRight;
         }
     } else {
         if (absDeltaY > minSwipeDistance) {
-            slideResult = (deltaY < 0) ? slideUp() : slideDown();
+            slideFn = (deltaY < 0) ? slideUp : slideDown;
         }
     }
-    if (slideResult) {
+    
+    if (slideFn) {
+        // 1. Simula o movimento
+        let slideResult = slideFn(board);
+        
+        // 2. Se for válido, atualiza o 'board' global
+        if (slideResult.hasChanged) {
+            board = slideResult.board;
+        }
+        
+        // 3. Processa o resultado
         processMove(slideResult, isFastMove);
     }
 }
 
-// --- Funções de Slide ---
+// --- Funções de Slide (ALTERADAS) ---
 // (boardHasTile - sem alterações)
 function boardHasTile(value) {
     for (let r = 0; r < rows; r++) {
@@ -451,6 +432,7 @@ function boardHasTile(value) {
     }
     return false;
 }
+
 // (slide - sem alterações)
 function slide(row) {
     let newRow = new Array(cols).fill(0);
@@ -499,58 +481,81 @@ function slide(row) {
     }
     return { newRow, mergedIndices, moveDamageValues };
 }
-// (slideLeft, slideRight, slideUp, slideDown - sem alterações)
-function slideLeft() {
+
+// ALTERADO: Funções de slide agora são "puras" (recebem 'inputBoard')
+function slideLeft(inputBoard) {
+    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
     let hasChanged = false, mergedTiles = [], totalDamageValues = []; 
+    
     for (let r = 0; r < rows; r++) {
-        let row = board[r], originalRowJSON = JSON.stringify(row);
+        let row = newBoard[r]; // Pega da cópia
         let { newRow, mergedIndices, moveDamageValues } = slide(row);
-        board[r] = newRow; totalDamageValues.push(...moveDamageValues);
-        if (JSON.stringify(newRow) !== originalRowJSON) hasChanged = true;
+        newBoard[r] = newRow; // Modifica a cópia
+        totalDamageValues.push(...moveDamageValues);
         for (let c of mergedIndices) mergedTiles.push({r: r, c: c});
     }
-    return { hasChanged, mergedTiles, totalDamageValues };
+    
+    hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
 }
-function slideRight() {
+function slideRight(inputBoard) {
+    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
     let hasChanged = false, mergedTiles = [], totalDamageValues = [];
+    
     for (let r = 0; r < rows; r++) {
-        let row = board[r], originalRowJSON = JSON.stringify(row);
+        let row = newBoard[r]; // Pega da cópia
         let reversedRow = row.reverse();
         let { newRow: newReversedRow, mergedIndices: reversedMergedIndices, moveDamageValues } = slide(reversedRow);
-        totalDamageValues.push(...moveDamageValues); let newRow = newReversedRow.reverse(); board[r] = newRow;
-        if (JSON.stringify(newRow) !== originalRowJSON) hasChanged = true;
+        totalDamageValues.push(...moveDamageValues); 
+        let newRow = newReversedRow.reverse();
+        newBoard[r] = newRow; // Modifica a cópia
         for (let c_rev of reversedMergedIndices) mergedTiles.push({r: r, c: cols - 1 - c_rev});
     }
-    return { hasChanged, mergedTiles, totalDamageValues };
+    
+    hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
 }
-function slideUp() {
+function slideUp(inputBoard) {
+    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
     let hasChanged = false, mergedTiles = [], totalDamageValues = [];
+    
     for (let c = 0; c < cols; c++) {
-        let column = [], originalColumnJSON;
-        for (let r = 0; r < rows; r++) column.push(board[r][c]);
-        originalColumnJSON = JSON.stringify(column);
+        let column = [];
+        for (let r = 0; r < rows; r++) column.push(newBoard[r][c]); // Lê da cópia
+        
         let { newRow: newColumn, mergedIndices, moveDamageValues } = slide(column);
         totalDamageValues.push(...moveDamageValues);
-        if (JSON.stringify(newColumn) !== originalColumnJSON) hasChanged = true;
+        
         for (let r_idx of mergedIndices) mergedTiles.push({r: r_idx, c: c});
-        for (let r = 0; r < rows; r++) board[r][c] = newColumn[r];
+        for (let r = 0; r < rows; r++) {
+            newBoard[r][c] = newColumn[r]; // Modifica a cópia
+        }
     }
-    return { hasChanged, mergedTiles, totalDamageValues };
+    
+    hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
 }
-function slideDown() {
+function slideDown(inputBoard) {
+    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
     let hasChanged = false, mergedTiles = [], totalDamageValues = [];
+    
     for (let c = 0; c < cols; c++) {
-        let column = [], originalColumnJSON;
-        for (let r = 0; r < rows; r++) column.push(board[r][c]);
-        originalColumnJSON = JSON.stringify(column);
+        let column = [];
+        for (let r = 0; r < rows; r++) column.push(newBoard[r][c]); // Lê da cópia
+        
         let reversedColumn = column.reverse();
         let { newRow: newReversedColumn, mergedIndices: reversedMergedIndices, moveDamageValues } = slide(reversedColumn);
-        totalDamageValues.push(...moveDamageValues); let newColumn = newReversedColumn.reverse();
-        if (JSON.stringify(newColumn) !== originalColumnJSON) hasChanged = true;
+        totalDamageValues.push(...moveDamageValues); 
+        let newColumn = newReversedColumn.reverse();
+        
         for (let r_rev of reversedMergedIndices) mergedTiles.push({r: rows - 1 - r_rev, c: c});
-        for (let r = 0; r < rows; r++) board[r][c] = newColumn[r];
+        for (let r = 0; r < rows; r++) {
+            newBoard[r][c] = newColumn[r]; // Modifica a cópia
+        }
     }
-    return { hasChanged, mergedTiles, totalDamageValues };
+    
+    hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
 }
 
 // --- VERIFICAÇÃO DE FIM DE JOGO ---
