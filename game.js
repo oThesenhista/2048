@@ -17,76 +17,159 @@ let enemiesDisplay = document.getElementById("enemies-defeated");
 // --- VARIÁVEIS DE ATAQUE ---
 let blockAttackTimer = null;
 let deleteAttackTimer = null;
-const BLOCK_INTERVAL = 5000;
+const BLOCK_INTERVAL_START = 6000;
+const DELETE_DELAY_MIN_START = 15000;
+const DELETE_DELAY_MAX_START = 45000;
 const BLOCK_DURATION = 3000;
-let blockedSlot = null;
+let currentBlockInterval;
+let currentDeleteMin;
+let currentDeleteMax;
+let blockedSlots = [];
+let maxBlocks = 1;
 let isInputLocked = false;
-
-// --- NOVO: VARIÁVEIS DE TOQUE ---
-let touchStartX = 0;
-let touchStartY = 0;
+const FAST_MOVE_THRESHOLD = 200;
+let lastMoveTimestamp = 0;
+let noMergeStreak = 0;
 
 // --- FUNÇÕES DE TIMER DE ATAQUE ---
 function clearBlockTimer() { if (blockAttackTimer) { clearInterval(blockAttackTimer); blockAttackTimer = null; } }
 function clearDeleteTimer() { if (deleteAttackTimer) { clearTimeout(deleteAttackTimer); deleteAttackTimer = null; } }
-function startBlockTimer() { clearBlockTimer(); blockAttackTimer = setInterval(blockSlotAttack, BLOCK_INTERVAL); }
+function startBlockTimer() {
+    clearBlockTimer();
+    blockAttackTimer = setInterval(blockSlotAttack, currentBlockInterval);
+}
 function scheduleDeleteAttack() {
     clearDeleteTimer();
-    const delay = Math.random() * (15000 - 5000) + 5000;
+    const delay = Math.random() * (currentDeleteMax - currentDeleteMin) + currentDeleteMin;
     deleteAttackTimer = setTimeout(deletePieceAttack, delay);
 }
 
 // --- FUNÇÕES DE ATAQUE ---
 function blockSlotAttack() {
-    if (isInputLocked || blockedSlot) return; 
+    if (isInputLocked || blockedSlots.length >= maxBlocks) return; 
     let availableSlots = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] >= 0) availableSlots.push({r, c});
     if (availableSlots.length === 0) return;
     let {r, c} = availableSlots[Math.floor(Math.random() * availableSlots.length)];
-    blockedSlot = { r, c, value: board[r][c] };
+    const newBlockedSlot = { r, c, value: board[r][c] };
+    blockedSlots.push(newBlockedSlot);
     board[r][c] = -1;
-    updateBoardView([], [], [], [{r, c}]); 
-    setTimeout(unblockSlot, BLOCK_DURATION);
+    updateBoardView([], [], [], [newBlockedSlot]); 
+    setTimeout(() => unblockSlot(newBlockedSlot), BLOCK_DURATION);
 }
 function deletePieceAttack() {
-    let availableTiles = [];
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] > 0) availableTiles.push({r, c});
-    if (availableTiles.length === 0) {
-        scheduleDeleteAttack();
-        checkGameOver();
+    applyPunishmentDeletions(1, scheduleDeleteAttack);
+}
+function unblockSlot(slotToUnblock) {
+    if (isInputLocked) { setTimeout(() => unblockSlot(slotToUnblock), 100); return; }
+    if (!slotToUnblock) return;
+    const {r, c, value} = slotToUnblock;
+    if (board[r][c] === -1) board[r][c] = value;
+    blockedSlots = blockedSlots.filter(s => s.r !== r || s.c !== c);
+    updateBoardView([], [], [], []);
+}
+
+// ALTERADO: Lógica de deleção com probabilidade
+function applyPunishmentDeletions(count, onCompleteCallback) {
+    if (isInputLocked || currentEnemy.hp <= 0 || count <= 0) {
+        if (onCompleteCallback) onCompleteCallback();
         return;
     }
+
     isInputLocked = true;
-    let {r, c} = availableTiles[Math.floor(Math.random() * availableTiles.length)];
+    let tilesToDelete = [];
+    
+    // Cria um "shadow board" para que múltiplas deleções no mesmo tick
+    // não tentem pegar a mesma peça.
+    let tempBoard = JSON.parse(JSON.stringify(board)); 
+
+    for (let i = 0; i < count; i++) {
+        // 1. Criar baldes de peças disponíveis
+        let buckets = {
+            low: [],    // 2, 4, 8
+            mid: [],    // 16, 32
+            high: [],   // 64, 128
+            epic: []    // 256+
+        };
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const val = tempBoard[r][c];
+                if (val > 0) {
+                    const tile = {r, c, val};
+                    if (val >= 256) buckets.epic.push(tile);
+                    else if (val >= 64) buckets.high.push(tile);
+                    else if (val >= 16) buckets.mid.push(tile);
+                    else buckets.low.push(tile);
+                }
+            }
+        }
+        
+        // 2. Escolher um balde baseado na probabilidade
+        const rand = Math.random();
+        let chosenBucket;
+        if (rand < 0.70) { // 70%
+            chosenBucket = buckets.low;
+        } else if (rand < 0.85) { // 15%
+            chosenBucket = buckets.mid;
+        } else if (rand < 0.95) { // 10%
+            chosenBucket = buckets.high;
+        } else { // 5%
+            chosenBucket = buckets.epic;
+        }
+        
+        // 3. Lógica de Fallback: Se o balde escolhido estiver vazio, tenta o próximo mais comum
+        if (chosenBucket.length === 0) {
+            if (buckets.low.length > 0) chosenBucket = buckets.low;
+            else if (buckets.mid.length > 0) chosenBucket = buckets.mid;
+            else if (buckets.high.length > 0) chosenBucket = buckets.high;
+            else if (buckets.epic.length > 0) chosenBucket = buckets.epic;
+            else break; // Não há mais peças para deletar
+        }
+        
+        // 4. Escolher uma peça do balde
+        let tileToPick = chosenBucket[Math.floor(Math.random() * chosenBucket.length)];
+        tilesToDelete.push(tileToPick);
+        
+        // 5. Remove do "shadow board" para a próxima iteração
+        tempBoard[tileToPick.r][tileToPick.c] = 0; 
+    }
+
+    if (tilesToDelete.length === 0) {
+        isInputLocked = false;
+        if (onCompleteCallback) onCompleteCallback();
+        return;
+    }
+    
     document.getElementById("game-board").classList.add("shake");
-    updateBoardView([], [], [{r, c}], []); 
+    updateBoardView([], [], tilesToDelete, []); 
+    
     setTimeout(() => {
-        board[r][c] = 0;
+        // Agora, aplica as deleções no "true" board
+        for (const tile of tilesToDelete) {
+            if (board[tile.r][tile.c] > 0) {
+                 board[tile.r][tile.c] = 0;
+            }
+        }
         isInputLocked = false;
         document.getElementById("game-board").classList.remove("shake");
         updateBoardView([], [], [], []);
-        scheduleDeleteAttack();
+        if (onCompleteCallback) onCompleteCallback();
         checkGameOver();
     }, 600);
 }
-function unblockSlot() {
-    if (isInputLocked) { setTimeout(unblockSlot, 100); return; }
-    if (!blockedSlot) return;
-    const {r, c, value} = blockedSlot;
-    if (board[r][c] === -1) board[r][c] = value;
-    blockedSlot = null;
-    updateBoardView([], [], [], []);
-}
+
 
 // --- LÓGICA PRINCIPAL DO JOGO ---
 function restartGame() {
     enemiesDefeated = 0;
     clearBlockTimer();
     clearDeleteTimer();
+    lastMoveTimestamp = 0;
+    maxBlocks = 1;
+    noMergeStreak = 0;
     resetLevel();
 }
-
-// ALTERADO: Adiciona ouvintes de toque
 function resetLevel() {
     board = [ [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0] ];
     gameWon = false;
@@ -94,14 +177,19 @@ function resetLevel() {
     enemiesDisplay.innerText = enemiesDefeated;
     clearBlockTimer();
     clearDeleteTimer();
-    blockedSlot = null;
+    blockedSlots = [];
     isInputLocked = false;
+    noMergeStreak = 0;
+    const speedFactor = Math.pow(0.95, enemiesDefeated);
+    maxBlocks = Math.min(3, 1 + Math.floor(enemiesDefeated / 4));
+    currentBlockInterval = Math.max(2000, BLOCK_INTERVAL_START * speedFactor);
+    currentDeleteMin = Math.max(10000, DELETE_DELAY_MIN_START * speedFactor);
+    currentDeleteMax = Math.max(15000, DELETE_DELAY_MAX_START * speedFactor);
     document.getElementById("game-over-overlay").classList.remove("visible");
     document.getElementById("enemy-defeated-overlay").classList.remove("visible");
     document.getElementById("enemy-condition-text").classList.remove("condition-shake");
     spawnNewEnemy();
     updateEnemyUI();
-    
     const gameBoard = document.getElementById("game-board");
     gameBoard.innerHTML = ""; 
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -110,46 +198,37 @@ function resetLevel() {
         cell.id = `grid-cell-${r}-${c}`; 
         gameBoard.append(cell);
     }
-    
-    // Adiciona ouvintes de teclado
-    document.removeEventListener("keyup", handleKeyInput); // Renomeado
+    document.removeEventListener("keyup", handleKeyInput);
     document.addEventListener("keyup", handleKeyInput);
-    
-    // NOVO: Adiciona ouvintes de toque
     gameBoard.removeEventListener('touchstart', handleTouchStart);
     gameBoard.addEventListener('touchstart', handleTouchStart, { passive: false });
-    
     gameBoard.removeEventListener('touchend', handleTouchEnd);
     gameBoard.addEventListener('touchend', handleTouchEnd, { passive: false });
-    
-    // Spawna peças e inicia timers
     let spawned1 = spawnNumber();
     let spawned2 = spawnNumber();
     updateBoardView([spawned1, spawned2], [], [], []);
     startBlockTimer();
     scheduleDeleteAttack();
 }
-
-// ALTERADO: Adicionadas novas condições de valor único
+// (spawnNewEnemy - sem alterações)
 function spawnNewEnemy() {
     let name = `Inimigo Nível ${enemiesDefeated + 1}`;
     let hp = Math.floor(100 * Math.pow(1.2, enemiesDefeated));
     let enemyRules = {};
-
     switch (enemiesDefeated) {
         case 0: case 1:
             enemyRules = { hp: hp, merges: null, text: "Condição: Nenhuma" }; break;
         case 2:
             enemyRules = { hp: 150, merges: [4, 8], text: "Dano: Apenas 4 ou 8" }; break;
-        case 3: // NOVO: Condição de valor único
+        case 3:
             enemyRules = { hp: 180, merges: [16], text: "Dano: Apenas 16" }; break;
         case 4: case 5:
             enemyRules = { hp: 220, merges: [16, 32], text: "Dano: Apenas 16 ou 32" }; break;
-        case 6: // NOVO: Condição de valor único
+        case 6:
             enemyRules = { hp: 300, merges: [32], text: "Dano: Apenas 32" }; break;
         case 7:
             enemyRules = { hp: 330, merges: [64, 128], text: "Dano: Apenas 64 ou 128" }; break;
-        case 8: // NOVO: Condição de valor único
+        case 8:
             enemyRules = { hp: 450, merges: [64], text: "Dano: Apenas 64" }; break;
         case 9:
             enemyRules = { hp: 500, merges: [32, 64], text: "Dano: Apenas 32 ou 64" }; break;
@@ -161,12 +240,14 @@ function spawnNewEnemy() {
     currentEnemy = { name: name, hp: enemyRules.hp, maxHp: enemyRules.hp, allowedMerges: enemyRules.merges, conditionText: enemyRules.text };
     document.getElementById("enemy-name").innerText = currentEnemy.name;
 }
+// (updateEnemyUI - sem alterações)
 function updateEnemyUI() {
     const hpPercent = (currentEnemy.hp / currentEnemy.maxHp) * 100;
     document.getElementById("enemy-hp-bar-inner").style.width = `${Math.max(hpPercent, 0)}%`;
     document.getElementById("enemy-hp-text").innerText = `${Math.max(currentEnemy.hp, 0)} / ${currentEnemy.maxHp}`;
     document.getElementById("enemy-condition-text").innerText = currentEnemy.conditionText;
 }
+// (applyDamage - sem alterações)
 function applyDamage(damageValues) {
     if (damageValues.length === 0 || currentEnemy.hp <= 0) { return; }
     let totalMoveDamage = 0, totalValidDamage = 0;
@@ -203,6 +284,7 @@ function applyDamage(damageValues) {
 }
 
 // --- LÓGICA DO 2048 ---
+// (updateBoardView - sem alterações)
 function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTiles = []) {
     const spawnedKeys = new Set(spawnedTiles.map(t => `${t.r}-${t.c}`));
     const mergedKeys = new Set(mergedTiles.map(t => `${t.r}-${t.c}`));
@@ -239,6 +321,7 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
         }
     }
 }
+// (spawnNumber - sem alterações)
 function spawnNumber() {
     let emptyCells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] === 0) emptyCells.push({r, c});
@@ -250,16 +333,32 @@ function spawnNumber() {
     return {r, c};
 }
 
-// --- NOVO: LÓGICA DE MOVIMENTO REATORADA ---
-
-// NOVO: Função que processa o resultado de um movimento
-function processMove(slideResult) {
+// --- LÓGICA DE MOVIMENTO ---
+// (processMove - sem alterações)
+function processMove(slideResult, isFastMove) {
     let { hasChanged, mergedTiles, totalDamageValues } = slideResult;
-    
+    let deletionsToApply = 0;
     if (hasChanged) {
+        if (isFastMove) {
+            deletionsToApply++;
+        }
+        if (totalDamageValues.length > 0) {
+            noMergeStreak = 0;
+        } else {
+            if (boardHasTile(16)) {
+                noMergeStreak++;
+                if (noMergeStreak >= 3) {
+                    deletionsToApply++;
+                    noMergeStreak = 0;
+                }
+            }
+        }
         applyDamage(totalDamageValues);
         updateBoardView([], mergedTiles, [], []);
         if (currentEnemy.hp > 0) {
+            if (deletionsToApply > 0) {
+                applyPunishmentDeletions(deletionsToApply, null);
+            }
             setTimeout(() => {
                 const spawnedTile = spawnNumber();
                 updateBoardView(spawnedTile ? [spawnedTile] : [], [], [], []);
@@ -272,11 +371,17 @@ function processMove(slideResult) {
     }
 }
 
-// ALTERADO: Renomeado e agora chama processMove
+// ALTERADO: Lógica de timestamp movida
 function handleKeyInput(e) {
+    // NOVO: Timestamp é atualizado AQUI
+    const now = Date.now();
+    const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
+    lastMoveTimestamp = now;
+
     if (isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
         return;
     }
+    
     let slideResult = null;
     switch(e.key) {
         case "ArrowLeft": slideResult = slideLeft(); break;
@@ -285,62 +390,68 @@ function handleKeyInput(e) {
         case "ArrowDown": slideResult = slideDown(); break;
         default: return;
     }
-    processMove(slideResult);
+    processMove(slideResult, isFastMove);
 }
 
-// --- NOVO: FUNÇÕES DE CONTROLE DE TOQUE ---
+// --- CONTROLE DE TOQUE ---
 function handleTouchStart(e) {
-    e.preventDefault(); // Impede o scroll da página
+    e.preventDefault();
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 }
 
+// ALTERADO: Lógica de timestamp movida
 function handleTouchEnd(e) {
     e.preventDefault();
-    if (isInputLocked) return; // Não faz nada se o input estiver travado
+    
+    // NOVO: Timestamp é atualizado AQUI
+    const now = Date.now();
+    const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
+    lastMoveTimestamp = now;
+    
+    if (isInputLocked) return;
     
     let touchEndX = e.changedTouches[0].clientX;
     let touchEndY = e.changedTouches[0].clientY;
     
-    handleSwipe(touchEndX, touchEndY);
+    handleSwipe(touchEndX, touchEndY, isFastMove);
 }
 
-function handleSwipe(endX, endY) {
+// (handleSwipe - sem alterações)
+function handleSwipe(endX, endY, isFastMove) {
     let deltaX = endX - touchStartX;
     let deltaY = endY - touchStartY;
-    
     let absDeltaX = Math.abs(deltaX);
     let absDeltaY = Math.abs(deltaY);
-    
-    const minSwipeDistance = 30; // Mínimo de 30px para ser um swipe
+    const minSwipeDistance = 30;
     let slideResult = null;
-
     if (absDeltaX > absDeltaY) {
-        // Swipe Horizontal
         if (absDeltaX > minSwipeDistance) {
-            if (deltaX < 0) {
-                slideResult = slideLeft(); // Esquerda
-            } else {
-                slideResult = slideRight(); // Direita
-            }
+            slideResult = (deltaX < 0) ? slideLeft() : slideRight();
         }
     } else {
-        // Swipe Vertical
         if (absDeltaY > minSwipeDistance) {
-            if (deltaY < 0) {
-                slideResult = slideUp(); // Cima
-            } else {
-                slideResult = slideDown(); // Baixo
-            }
+            slideResult = (deltaY < 0) ? slideUp() : slideDown();
         }
     }
-    
     if (slideResult) {
-        processMove(slideResult);
+        processMove(slideResult, isFastMove);
     }
 }
 
-// --- Funções de Slide (sem alterações) ---
+// --- Funções de Slide ---
+// (boardHasTile - sem alterações)
+function boardHasTile(value) {
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c] >= value) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+// (slide - sem alterações)
 function slide(row) {
     let newRow = new Array(cols).fill(0);
     let mergedIndices = [];
@@ -388,6 +499,7 @@ function slide(row) {
     }
     return { newRow, mergedIndices, moveDamageValues };
 }
+// (slideLeft, slideRight, slideUp, slideDown - sem alterações)
 function slideLeft() {
     let hasChanged = false, mergedTiles = [], totalDamageValues = []; 
     for (let r = 0; r < rows; r++) {
@@ -442,6 +554,7 @@ function slideDown() {
 }
 
 // --- VERIFICAÇÃO DE FIM DE JOGO ---
+// (showGameOverOverlay, checkGameOver, checkWin - sem alterações)
 function showGameOverOverlay(message) {
     document.getElementById("game-over-text").innerText = message;
     let overlay = document.getElementById("game-over-overlay");
