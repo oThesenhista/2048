@@ -1,0 +1,194 @@
+/* NOVO: Reset básico e box-sizing */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box; 
+}
+
+html {
+    /* Define o tamanho base da fonte (1rem = 16px) */
+    font-size: 100%; 
+}
+
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background-color: #faf8ef;
+    color: #776e65;
+    padding: 20px 0;
+    
+    /* NOVO: Impede o "balanço" horizontal em celulares */
+    overflow-x: hidden; 
+}
+
+/* --- ALTERADO: Contêineres Responsivos --- */
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    /* Usa 95% da largura da tela, com um máximo de 540px */
+    width: 95%;
+    max-width: 540px; 
+    margin: 0 auto;
+}
+
+h1 {
+    /* Fonte fluida: Mínimo 2.5rem, preferido 8vw, máximo 3.25rem */
+    font-size: clamp(2.5rem, 8vw, 3.25rem);
+}
+
+.score-container {
+    /* Fonte fluida */
+    font-size: clamp(0.9rem, 2.5vw, 1.25rem); 
+    background-color: #bbada0;
+    color: white;
+    padding: 1rem 1.25rem;
+    border-radius: 3px;
+    font-weight: bold;
+    
+    /* NOVO: Reduz o padding em telas pequenas */
+    padding: clamp(0.5rem, 3vw, 1rem);
+}
+
+#restart-btn {
+    background-color: #8f7a66;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-top: 15px;
+}
+#restart-btn:hover {
+    background-color: #776e65;
+}
+
+/* --- Sobreposições (ALTERADO) --- */
+/* (A lógica é a mesma, mas a fonte agora é responsiva) */
+#game-over-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(238, 228, 218, 0.73);
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    font-size: clamp(2.5rem, 10vw, 3.5rem); /* Fonte fluida */
+    font-weight: bold; color: #776e65; text-align: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 100;
+}
+#game-over-overlay.hidden { opacity: 0; }
+#game-over-overlay.visible { opacity: 1; }
+#game-over-overlay small {
+    font-size: clamp(1rem, 4vw, 1.25rem); /* Fonte fluida */
+    margin-top: 10px;
+}
+
+/* --- ESTILOS DO INIMIGO (ALTERADO) --- */
+#enemy-container {
+    width: 95%;
+    max-width: 430px; /* Alinha com o tabuleiro */
+    margin: 20px auto 10px auto;
+    padding: 15px;
+    background-color: #bbada0;
+    border-radius: 6px;
+    color: white;
+}
+
+#enemy-name {
+    font-size: clamp(1.1rem, 4vw, 1.25rem);
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+#enemy-hp-bar-outer { width: 100%; height: 30px; background-color: #cdc1b4; border-radius: 3px; position: relative; border: 2px solid #776e65; }
+#enemy-hp-bar-inner { width: 100%; height: 100%; background-color: #f65e3b; border-radius: 2px; transition: width 0.2s ease-out; }
+#enemy-hp-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #f9f6f2; text-shadow: 1px 1px 2px #776e65; }
+#enemy-condition-text {
+    font-size: clamp(0.9rem, 3.5vw, 1rem);
+    font-weight: bold;
+    color: #f9f6f2;
+    text-shadow: 1px 1px 1px #776e65;
+    margin-top: 10px;
+}
+
+/* --- ESTILOS DO TABULEIRO (ALTERADO) --- */
+#game-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 15px;
+    
+    /* ALTERADO: Agora é fluido e quadrado (baseado em vw) */
+    width: 95%;
+    height: 95vw; 
+    max-width: 430px;
+    max-height: 430px;
+    
+    margin: 20px auto;
+    padding: 15px;
+    background-color: #bbada0;
+    border-radius: 6px;
+    
+    /* NOVO: Impede seleção de texto ao deslizar */
+    user-select: none;
+    touch-action: none; /* Desativa zoom/pan do navegador no tabuleiro */
+}
+
+.grid-cell {
+    background-color: #cdc1b4;
+    border-radius: 3px;
+    position: relative;
+    /* Tamanho é controlado pelo grid, não por px fixo */
+}
+
+.tile {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    border-radius: 3px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    /* ALTERADO: Fonte fluida */
+    font-size: clamp(1.5rem, 8vw, 2.8rem);
+    
+    font-weight: bold;
+    color: #776e65;
+    transition: 100ms ease-in-out;
+}
+
+/* ... (Mapa de Cores - sem alterações) ... */
+.tile-2 { background-color: #eee4da; }
+.tile-4 { background-color: #ede0c8; }
+.tile-8 { background-color: #f2b179; color: #f9f6f2; }
+.tile-16 { background-color: #f59563; color: #f9f6f2; }
+.tile-32 { background-color: #f67c5f; color: #f9f6f2; }
+.tile-64 { background-color: #f65e3b; color: #f9f6f2; }
+.tile-128 { background-color: #edcf72; color: #f9f6f2; }
+.tile-256 { background-color: #edcc61; color: #f9f6f2; }
+.tile-512 { background-color: #edc850; color: #f9f6f2; }
+.tile-1024 { background-color: #edc53f; color: #f9f6f2; }
+.tile-2048 { background-color: #edc22e; color: #f9f6f2; }
+
+/* ... (Animações - sem alterações) ... */
+.tile-new { animation: spawn 0.2s ease; }
+@keyframes spawn { from { transform: scale(0); } to { transform: scale(1); } }
+.tile-merged { animation: merge 0.2s ease; }
+@keyframes merge { from { transform: scale(1); } 50% { transform: scale(1.2); } to { transform: scale(1); } }
+.tile-deleted { background-color: #f65e3b !important; color: #f9f6f2 !important; animation: delete-anim 0.6s ease-out forwards; }
+@keyframes delete-anim { from { transform: scale(1); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+.shake { animation: shake 0.4s ease-in-out; }
+@keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-5px); } 100% { transform: translateX(0); } }
+#enemy-defeated-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.7); display: flex; justify-content: center; align-items: center; font-size: clamp(2.5rem, 10vw, 3.75rem); font-weight: bold; color: #4CAF50; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; z-index: 101; transition: opacity 0.3s ease-out; }
+#enemy-defeated-overlay.hidden { opacity: 0; }
+#enemy-defeated-overlay.visible { opacity: 1; animation: bounce-in 0.4s ease; }
+@keyframes bounce-in { 0% { transform: scale(0.5); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+.condition-shake { animation: condition-shake 0.4s ease-in-out; }
+@keyframes condition-shake { 0% { transform: scale(1); color: #f65e3b; } 25% { transform: translateX(-5px) scale(1.1); } 50% { transform: translateX(5px) scale(1.1); } 75% { transform: translateX(-5px) scale(1.1); } 100% { transform: scale(1); color: #f65e3b; } }
+
+/* ... (Estilos de Bloco Atacado - sem alterações) ... */
+.tile-blocked-style { background-color: #776e65; color: #faf8ef; font-size: 60px; }
+.tile-blocked { animation: block 0.2s ease-out; }
+@keyframes block { from { transform: rotate(0deg) scale(0.5); } to { transform: rotate(180deg) scale(1); } }

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>2048 - RPG</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="header-container">
+        <h1>2048</h1>
+        
+        <div class="score-container" id="enemies-defeated-container">
+            Derrotados: <span id="enemies-defeated">0</span>
+        </div>
+        
+        <div class="score-container">
+            Dano: <span id="score">0</span>
+        </div>
+    </div>
+    
+    <button id="restart-btn">Novo Jogo</button>
+
+    <div id="enemy-container">
+        <div id="enemy-name">Inimigo Nível 1</div>
+        <div id="enemy-hp-bar-outer">
+            <div id="enemy-hp-bar-inner"></div>
+            <div id="enemy-hp-text">100 / 100</div>
+        </div>
+        <div id="enemy-condition-text">Condição: Nenhuma</div>
+    </div>
+
+    <div id="game-board">
+        </div>
+    
+    <div id="game-over-overlay" class="hidden">
+        <div id="game-over-text">Fim de Jogo!</div> 
+        <small>Pressione "Novo Jogo" para tentar novamente.</small>
+    </div>
+    
+    <div id="enemy-defeated-overlay" class="hidden">
+        <div id="enemy-defeated-text">Inimigo Derrotado!</div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
