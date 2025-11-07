@@ -1,4 +1,3 @@
-/* NOVO: Reset básico e box-sizing */
 * {
     margin: 0;
     padding: 0;
@@ -9,25 +8,78 @@ html {
     font-size: 100%; 
 }
 
+/* --- NOVO: Variáveis de Tema (Light & Dark) --- */
+body {
+    /* Tema Claro (Padrão) */
+    --color-background: #faf8ef;
+    --color-text-primary: #776e65;
+    --color-text-secondary: #f9f6f2;
+    --color-grid-bg: #bbada0;
+    --color-grid-cell: #cdc1b4;
+    --color-button: #8f7a66;
+    --color-button-hover: #776e65;
+    --color-overlay-bg: rgba(238, 228, 218, 0.73);
+    --color-overlay-victory-bg: rgba(255, 255, 255, 0.7);
+    --color-enemy-bg: #bbada0;
+    --color-enemy-hp-bar: #cdc1b4;
+    --color-enemy-hp-fill: #f65e3b;
+    
+    /* Cores das Peças (Light) */
+    --color-tile-2: #eee4da;
+    --color-tile-4: #ede0c8;
+    --color-tile-text-dark: #776e65; /* Texto para 2 e 4 */
+    
+    /* Cores estáticas (permanecem as mesmas) */
+    --color-static-16: #f59563;
+    --color-static-32: #f67c5f;
+    --color-static-64: #f65e3b;
+    --color-static-blocked: #776e65;
+}
+
+body.dark-theme {
+    /* Tema Escuro (Overrides) */
+    --color-background: #121212;
+    --color-text-primary: #f9f6f2;
+    --color-text-secondary: #f9f6f2;
+    --color-grid-bg: #424242;
+    --color-grid-cell: #5a5a5a;
+    --color-button: #776e65;
+    --color-button-hover: #8f7a66;
+    --color-overlay-bg: rgba(30, 30, 30, 0.73);
+    --color-overlay-victory-bg: rgba(50, 50, 50, 0.7);
+    --color-enemy-bg: #424242;
+    --color-enemy-hp-bar: #5a5a5a;
+    --color-enemy-hp-fill: #f65e3b; /* Mantém o vermelho para HP */
+    
+    /* Cores das Peças (Dark) */
+    --color-tile-2: #5a5a5a;
+    --color-tile-4: #6b6b6b;
+    --color-tile-text-dark: #f9f6f2; /* Texto agora é claro */
+    
+    /* Cores estáticas (podem mudar se quisermos) */
+    --color-static-blocked: #333;
+}
+/* --- FIM DAS Variáveis --- */
+
+
 body {
     font-family: Arial, sans-serif;
     text-align: center;
-    background-color: #faf8ef;
-    color: #776e65;
+    background-color: var(--color-background); /* ALTERADO */
+    color: var(--color-text-primary); /* ALTERADO */
     padding: 20px 0;
     overflow-x: hidden; 
-    
-    /* NOVO: Impede o "puxar para recarregar" no telemóvel */
     overscroll-behavior-y: contain;
+    transition: background-color 0.3s ease, color 0.3s ease; /* Transição suave */
 }
 
-/* --- ALTERADO: Contêineres Responsivos --- */
+/* --- Contêineres Responsivos --- */
 .header-container {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 95%;
-    max-width: 540px; 
+    max-width: 430px; 
     margin: 0 auto;
 }
 
@@ -37,37 +89,46 @@ h1 {
 
 .score-container {
     font-size: clamp(0.9rem, 2.5vw, 1.25rem); 
-    background-color: #bbada0;
-    color: white;
+    background-color: var(--color-grid-bg); /* ALTERADO */
+    color: white; /* Mantido branco para contraste */
     padding: 1rem 1.25rem;
     border-radius: 3px;
     font-weight: bold;
     padding: clamp(0.5rem, 3vw, 1rem);
+    transition: background-color 0.3s ease;
 }
 
 #restart-btn {
-    background-color: #8f7a66;
+    width: 95%;
+    max-width: 430px;
+    margin: 15px auto 20px auto;
+    padding: 15px 25px;
+    font-size: clamp(1.1rem, 4vw, 1.25rem);
+    background-color: var(--color-button); /* ALTERADO */
     color: white;
-    border: none;
-    padding: 0.75rem 1.25rem;
-    font-size: 1rem;
     font-weight: bold;
+    border: none;
     border-radius: 3px;
     cursor: pointer;
-    margin-top: 15px;
+    position: relative;
+    z-index: 102;
+    transition: background-color 0.3s ease;
 }
 #restart-btn:hover {
-    background-color: #776e65;
+    background-color: var(--color-button-hover); /* ALTERADO */
 }
 
-/* --- Sobreposições (ALTERADO) --- */
+/* --- Sobreposições --- */
 #game-over-overlay {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(238, 228, 218, 0.73);
+    background-color: var(--color-overlay-bg); /* ALTERADO */
     display: flex; flex-direction: column; justify-content: center; align-items: center;
     font-size: clamp(2.5rem, 10vw, 3.5rem);
-    font-weight: bold; color: #776e65; text-align: center;
-    opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 100;
+    font-weight: bold; 
+    color: var(--color-text-primary); /* ALTERADO */
+    text-align: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.5s; 
+    z-index: 100; 
 }
 #game-over-overlay.hidden { opacity: 0; }
 #game-over-overlay.visible { opacity: 1; }
@@ -76,15 +137,16 @@ h1 {
     margin-top: 10px;
 }
 
-/* --- ESTILOS DO INIMIGO (ALTERADO) --- */
+/* --- ESTILOS DO INIMIGO --- */
 #enemy-container {
     width: 95%;
     max-width: 430px;
     margin: 20px auto 10px auto;
     padding: 15px;
-    background-color: #bbada0;
+    background-color: var(--color-enemy-bg); /* ALTERADO */
     border-radius: 6px;
     color: white;
+    transition: background-color 0.3s ease;
 }
 
 #enemy-name {
@@ -92,18 +154,18 @@ h1 {
     font-weight: bold;
     margin-bottom: 10px;
 }
-#enemy-hp-bar-outer { width: 100%; height: 30px; background-color: #cdc1b4; border-radius: 3px; position: relative; border: 2px solid #776e65; }
-#enemy-hp-bar-inner { width: 100%; height: 100%; background-color: #f65e3b; border-radius: 2px; transition: width 0.2s ease-out; }
-#enemy-hp-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: #f9f6f2; text-shadow: 1px 1px 2px #776e65; }
+#enemy-hp-bar-outer { width: 100%; height: 30px; background-color: var(--color-enemy-hp-bar); border-radius: 3px; position: relative; border: 2px solid var(--color-button-hover); }
+#enemy-hp-bar-inner { width: 100%; height: 100%; background-color: var(--color-enemy-hp-fill); border-radius: 2px; transition: width 0.2s ease-out; }
+#enemy-hp-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-weight: bold; color: var(--color-text-secondary); text-shadow: 1px 1px 2px #776e65; }
 #enemy-condition-text {
     font-size: clamp(0.9rem, 3.5vw, 1rem);
     font-weight: bold;
-    color: #f9f6f2;
+    color: var(--color-text-secondary); /* ALTERADO */
     text-shadow: 1px 1px 1px #776e65;
     margin-top: 10px;
 }
 
-/* --- ESTILOS DO TABULEIRO (ALTERADO) --- */
+/* --- ESTILOS DO TABULEIRO --- */
 #game-board {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -115,16 +177,18 @@ h1 {
     max-height: 430px;
     margin: 20px auto;
     padding: 15px;
-    background-color: #bbada0;
+    background-color: var(--color-grid-bg); /* ALTERADO */
     border-radius: 6px;
     user-select: none;
     touch-action: none;
+    transition: background-color 0.3s ease;
 }
 
 .grid-cell {
-    background-color: #cdc1b4;
+    background-color: var(--color-grid-cell); /* ALTERADO */
     border-radius: 3px;
     position: relative;
+    transition: background-color 0.3s ease;
 }
 
 .tile {
@@ -139,38 +203,140 @@ h1 {
     align-items: center;
     font-size: clamp(1.5rem, 8vw, 2.8rem);
     font-weight: bold;
-    color: #776e65;
+    color: var(--color-text-primary); /* ALTERADO */
     transition: 100ms ease-in-out;
 }
 
-/* ... (Mapa de Cores) ... */
-.tile-2 { background-color: #eee4da; }
-.tile-4 { background-color: #ede0c8; }
-.tile-8 { background-color: #f2b179; color: #f9f6f2; }
-.tile-16 { background-color: #f59563; color: #f9f6f2; }
-.tile-32 { background-color: #f67c5f; color: #f9f6f2; }
-.tile-64 { background-color: #f65e3b; color: #f9f6f2; }
-.tile-128 { background-color: #edcf72; color: #f9f6f2; }
-.tile-256 { background-color: #edcc61; color: #f9f6f2; }
-.tile-512 { background-color: #edc850; color: #f9f6f2; }
-.tile-1024 { background-color: #edc53f; color: #f9f6f2; }
-.tile-2048 { background-color: #edc22e; color: #f9f6f2; }
+/* --- Mapa de Cores --- */
+.tile-2 { background-color: var(--color-tile-2); color: var(--color-tile-text-dark); }
+.tile-4 { background-color: var(--color-tile-4); color: var(--color-tile-text-dark); }
+.tile-8 { background-color: #f2b179; color: var(--color-text-secondary); }
+.tile-16 { background-color: #f59563; color: var(--color-text-secondary); }
+.tile-32 { background-color: #f67c5f; color: var(--color-text-secondary); }
+.tile-64 { background-color: #f65e3b; color: var(--color-text-secondary); }
+.tile-128 { background-color: #edcf72; color: var(--color-text-secondary); }
+.tile-256 { background-color: #edcc61; color: var(--color-text-secondary); }
+.tile-512 { background-color: #edc850; color: var(--color-text-secondary); }
+.tile-1024 { background-color: #edc53f; color: var(--color-text-secondary); }
+.tile-2048 { background-color: #edc22e; color: var(--color-text-secondary); }
 
-/* ... (Animações) ... */
+/* --- Animações --- */
 .tile-new { animation: spawn 0.2s ease; }
 @keyframes spawn { from { transform: scale(0); } to { transform: scale(1); } }
+
 .tile-merged { animation: merge 0.2s ease; }
 @keyframes merge { from { transform: scale(1); } 50% { transform: scale(1.2); } to { transform: scale(1); } }
+
 .tile-deleted { background-color: #f65e3b !important; color: #f9f6f2 !important; animation: delete-anim 0.6s ease-out forwards; }
 @keyframes delete-anim { from { transform: scale(1); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+
 .shake { animation: shake 0.4s ease-in-out; }
 @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-5px); } 100% { transform: translateX(0); } }
-#enemy-defeated-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.7); display: flex; justify-content: center; align-items: center; font-size: clamp(2.5rem, 10vw, 3.75rem); font-weight: bold; color: #4CAF50; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; z-index: 101; transition: opacity 0.3s ease-out; }
+
+#enemy-defeated-overlay { 
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+    background-color: var(--color-overlay-victory-bg); /* ALTERADO */
+    display: flex; justify-content: center; align-items: center; 
+    font-size: clamp(2.5rem, 10vw, 3.75rem); 
+    font-weight: bold; color: #4CAF50; 
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2); 
+    opacity: 0; pointer-events: none; 
+    z-index: 101; 
+    transition: opacity 0.3s ease-out; 
+}
 #enemy-defeated-overlay.hidden { opacity: 0; }
 #enemy-defeated-overlay.visible { opacity: 1; animation: bounce-in 0.4s ease; }
 @keyframes bounce-in { 0% { transform: scale(0.5); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
 .condition-shake { animation: condition-shake 0.4s ease-in-out; }
 @keyframes condition-shake { 0% { transform: scale(1); color: #f65e3b; } 25% { transform: translateX(-5px) scale(1.1); } 50% { transform: translateX(5px) scale(1.1); } 75% { transform: translateX(-5px) scale(1.1); } 100% { transform: scale(1); color: #f65e3b; } }
-.tile-blocked-style { background-color: #776e65; color: #faf8ef; font-size: 60px; }
+
+/* --- Estilo do Bloco Atacado --- */
+.tile-blocked-style { background-color: var(--color-static-blocked); color: #faf8ef; font-size: 60px; }
 .tile-blocked { animation: block 0.2s ease-out; }
 @keyframes block { from { transform: rotate(0deg) scale(0.5); } to { transform: rotate(180deg) scale(1); } }
+
+/* --- Estilos das Peças Estáticas (Alvo) --- */
+.tile-static {
+    box-shadow: 0 0 10px 3px #fff; 
+    animation: pulse 1.5s infinite ease-in-out;
+}
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+.tile-static-16 { background-color: var(--color-static-16); color: var(--color-text-secondary); }
+.tile-static-32 { background-color: var(--color-static-32); color: var(--color-text-secondary); }
+.tile-static-64 { background-color: var(--color-static-64); color: var(--color-text-secondary); }
+
+
+/* --- Recorde Local --- */
+#local-record-container {
+    width: 95%;
+    max-width: 430px;
+    margin: 20px auto;
+    padding: 15px 25px;
+    background-color: var(--color-button); /* ALTERADO */
+    border-radius: 3px;
+    color: white;
+    font-weight: bold;
+    font-size: clamp(1.1rem, 4vw, 1.25rem);
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    transition: background-color 0.3s ease;
+}
+#local-high-score {
+    color: var(--color-text-secondary); /* ALTERADO */
+}
+
+
+/* --- NOVO: Estilos do Interruptor de Tema --- */
+.theme-switch-wrapper {
+    display: flex;
+    align-items: center;
+}
+.theme-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+}
+.theme-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-grid-cell);
+    transition: .4s;
+}
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+}
+input:checked + .slider {
+    background-color: var(--color-enemy-hp-fill);
+}
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+.slider.round {
+    border-radius: 34px;
+}
+.slider.round:before {
+    border-radius: 50%;
+}

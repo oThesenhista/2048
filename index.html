@@ -6,9 +6,7 @@
     <title>2048 - RPG</title>
     
     <link rel="manifest" href="manifest.json">
-
     <meta name="theme-color" content="#bbada0">
-
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
@@ -17,19 +15,25 @@
 <body>
 
     <div class="header-container">
+        
+        <div class="theme-switch-wrapper">
+            <label class="theme-switch" for="theme-toggle">
+                <input type="checkbox" id="theme-toggle" />
+                <span class="slider round"></span>
+            </label>
+        </div>
+        
         <h1>2048</h1>
         
         <div class="score-container" id="enemies-defeated-container">
             Derrotados: <span id="enemies-defeated">0</span>
         </div>
         
-        <div class="score-container">
+        <div class="score-container" style="display: none;">
             Dano: <span id="score">0</span>
         </div>
     </div>
     
-    <button id="restart-btn">Novo Jogo</button>
-
     <div id="enemy-container">
         <div id="enemy-name">Inimigo Nível 1</div>
         <div id="enemy-hp-bar-outer">
@@ -42,6 +46,13 @@
     <div id="game-board">
         </div>
     
+    <div id="local-record-container">
+        <span>Meu Recorde:</span>
+        <span id="local-high-score">0</span>
+    </div>
+    
+    <button id="restart-btn">Novo Jogo</button>
+    
     <div id="game-over-overlay" class="hidden">
         <div id="game-over-text">Fim de Jogo!</div> 
         <small>Pressione "Novo Jogo" para tentar novamente.</small>
@@ -50,7 +61,7 @@
     <div id="enemy-defeated-overlay" class="hidden">
         <div id="enemy-defeated-text">Inimigo Derrotado!</div>
     </div>
-
+    
     <script src="game.js"></script>
     <script src="bot.js"></script>
     

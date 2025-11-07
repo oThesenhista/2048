@@ -1,7 +1,20 @@
 // game.js
+const HIGH_SCORE_KEY = "rpg2048-highScore";
+const THEME_KEY = "rpg2048-theme"; // NOVO
+
+// NOVO: Variáveis para o tema
+let themeToggle;
+let bodyElement;
+
 window.onload = function() {
     restartGame(); 
     document.getElementById("restart-btn").addEventListener("click", restartGame);
+    
+    // NOVO: Lógica do Tema
+    themeToggle = document.getElementById("theme-toggle");
+    bodyElement = document.body;
+    themeToggle.addEventListener("change", toggleTheme);
+    loadTheme();
 }
 
 let board;
@@ -14,7 +27,7 @@ let currentEnemy;
 let scoreDisplay = document.getElementById("score");
 let enemiesDisplay = document.getElementById("enemies-defeated");
 
-// --- VARIÁVEIS DE ATAQUE ---
+// ... (Variáveis de Ataque, Timers, etc.) ...
 let blockAttackTimer = null;
 let deleteAttackTimer = null;
 const BLOCK_INTERVAL_START = 6000;
@@ -30,6 +43,51 @@ let isInputLocked = false;
 const FAST_MOVE_THRESHOLD = 200;
 let lastMoveTimestamp = 0;
 let noMergeStreak = 0;
+
+
+// --- NOVO: Funções de Tema ---
+function loadTheme() {
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    applyTheme(savedTheme || 'light'); // Padrão é 'light'
+}
+
+function applyTheme(theme) {
+    if (theme === 'dark') {
+        bodyElement.classList.add("dark-theme");
+        themeToggle.checked = true;
+    } else {
+        bodyElement.classList.remove("dark-theme");
+        themeToggle.checked = false;
+    }
+    // Guarda a preferência
+    localStorage.setItem(THEME_KEY, theme);
+    
+    // NOVO: Atualiza a cor do tema do PWA
+    // (Isto muda a cor da barra de status no telemóvel)
+    const newThemeColor = (theme === 'dark') ? '#424242' : '#bbada0';
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', newThemeColor);
+}
+
+function toggleTheme() {
+    applyTheme(themeToggle.checked ? 'dark' : 'light');
+}
+// --- FIM Funções de Tema ---
+
+
+// --- Funções de Recorde Local ---
+function getHighScore() { return parseInt(localStorage.getItem(HIGH_SCORE_KEY) || "0"); }
+function loadLocalHighScore() { document.getElementById("local-high-score").innerText = getHighScore(); }
+function checkAndSaveHighScore() {
+    const currentScore = enemiesDefeated;
+    const highScore = getHighScore();
+    if (currentScore > highScore) {
+        localStorage.setItem(HIGH_SCORE_KEY, currentScore);
+        loadLocalHighScore();
+    }
+}
+
+// ... (O resto do seu game.js, de clearBlockTimer() até o final, 
+//      permanece exatamente o mesmo da última vez) ...
 
 // --- FUNÇÕES DE TIMER DE ATAQUE ---
 function clearBlockTimer() { if (blockAttackTimer) { clearInterval(blockAttackTimer); blockAttackTimer = null; } }
@@ -92,11 +150,15 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
         }
         const rand = Math.random();
         let chosenBucket;
-        if (rand < 0.70) { chosenBucket = buckets.low; }
-        else if (rand < 0.85) { chosenBucket = buckets.mid; }
-        else if (rand < 0.95) { chosenBucket = buckets.high; }
-        else { chosenBucket = buckets.epic; }
-        
+        if (rand < 0.90) { // 90%
+            chosenBucket = buckets.low;
+        } else if (rand < 0.95) { // 5%
+            chosenBucket = buckets.mid;
+        } else if (rand < 0.98) { // 3%
+            chosenBucket = buckets.high;
+        } else { // 2%
+            chosenBucket = buckets.epic;
+        }
         if (chosenBucket.length === 0) {
             if (buckets.low.length > 0) chosenBucket = buckets.low;
             else if (buckets.mid.length > 0) chosenBucket = buckets.mid;
@@ -157,6 +219,7 @@ function resetLevel() {
     document.getElementById("game-over-overlay").classList.remove("visible");
     document.getElementById("enemy-defeated-overlay").classList.remove("visible");
     document.getElementById("enemy-condition-text").classList.remove("condition-shake");
+    loadLocalHighScore();
     spawnNewEnemy();
     updateEnemyUI();
     const gameBoard = document.getElementById("game-board");
@@ -179,55 +242,113 @@ function resetLevel() {
     startBlockTimer();
     scheduleDeleteAttack();
 }
-// (spawnNewEnemy - sem alterações)
 function spawnNewEnemy() {
     let name = `Inimigo Nível ${enemiesDefeated + 1}`;
     let hp = Math.floor(100 * Math.pow(1.2, enemiesDefeated));
     let enemyRules = {};
-    switch (enemiesDefeated) {
-        case 0: case 1:
-            enemyRules = { hp: hp, merges: null, text: "Condição: Nenhuma" }; break;
-        case 2:
-            enemyRules = { hp: 150, merges: [4, 8], text: "Dano: Apenas 4 ou 8" }; break;
-        case 3:
-            enemyRules = { hp: 180, merges: [16], text: "Dano: Apenas 16" }; break;
-        case 4: case 5:
-            enemyRules = { hp: 220, merges: [16, 32], text: "Dano: Apenas 16 ou 32" }; break;
-        case 6:
-            enemyRules = { hp: 300, merges: [32], text: "Dano: Apenas 32" }; break;
-        case 7:
-            enemyRules = { hp: 330, merges: [64, 128], text: "Dano: Apenas 64 ou 128" }; break;
-        case 8:
-            enemyRules = { hp: 450, merges: [64], text: "Dano: Apenas 64" }; break;
-        case 9:
-            enemyRules = { hp: 500, merges: [32, 64], text: "Dano: Apenas 32 ou 64" }; break;
-        case 10:
-            enemyRules = { hp: 800, merges: [128], text: "Dano: Apenas 128" }; break;
-        default:
-            enemyRules = { hp: hp, merges: [32, 64, 128], text: "Dano: 32, 64 ou 128" }; break;
+    const goalTypeIndex = enemiesDefeated % 3; 
+    enemyRules = { 
+        hp: hp, 
+        goalType: 'HP_MERGE',
+        goalValue: null,
+        text: "Condição: Nenhuma" 
+    };
+    if (enemiesDefeated === 2) {
+        enemyRules = { hp: 150, goalType: 'HP_MERGE', goalValue: [4, 8], text: "Dano: Apenas 4 ou 8" };
+    } else if (enemiesDefeated === 3) {
+        enemyRules = { hp: 1, goalType: 'BUILD_TILE', goalValue: [128], text: "Condição: Crie um 128" };
+    } else if (enemiesDefeated === 4) {
+        enemyRules = { hp: 1, goalType: 'TARGET_MERGE', goalValue: [16], text: "Condição: Combine com o 16" };
+    } else if (enemiesDefeated === 5) {
+        enemyRules = { hp: 220, goalType: 'HP_MERGE', goalValue: [16, 32], text: "Dano: Apenas 16 ou 32" };
+    } else if (enemiesDefeated === 6) {
+        enemyRules = { hp: 1, goalType: 'BUILD_TILE', goalValue: [256], text: "Condição: Crie um 256" };
+    } else if (enemiesDefeated === 7) {
+        enemyRules = { hp: 1, goalType: 'TARGET_MERGE', goalValue: [32, 64], text: "Condição: Combine com o 32 ou 64" };
+    } else if (enemiesDefeated >= 8) {
+        switch (goalTypeIndex) {
+            case 0:
+                enemyRules = { hp: hp, goalType: 'HP_MERGE', goalValue: [32, 64, 128], text: "Dano: 32, 64 ou 128" };
+                break;
+            case 1:
+                enemyRules = { hp: 1, goalType: 'BUILD_TILE', goalValue: [512], text: "Condição: Crie um 512" };
+                break;
+            case 2:
+                enemyRules = { hp: 1, goalType: 'TARGET_MERGE', goalValue: [64], text: "Condição: Combine com o 64" };
+                break;
+        }
     }
-    currentEnemy = { name: name, hp: enemyRules.hp, maxHp: enemyRules.hp, allowedMerges: enemyRules.merges, conditionText: enemyRules.text };
+    currentEnemy = {
+        name: name,
+        hp: enemyRules.hp,
+        maxHp: enemyRules.hp,
+        goalType: enemyRules.goalType,
+        goalValue: enemyRules.goalValue,
+        conditionText: enemyRules.text
+    };
+    if (currentEnemy.goalType === 'TARGET_MERGE') {
+        currentEnemy.goalValue.forEach(value => {
+            placeStaticTile(value);
+        });
+    }
     document.getElementById("enemy-name").innerText = currentEnemy.name;
 }
-// (updateEnemyUI - sem alterações)
+function placeStaticTile(value) {
+    let emptyCells = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c] === 0) {
+                emptyCells.push({r, c});
+            }
+        }
+    }
+    if (emptyCells.length > 0) {
+        let {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        board[r][c] = -value; 
+    }
+}
 function updateEnemyUI() {
     const hpPercent = (currentEnemy.hp / currentEnemy.maxHp) * 100;
     document.getElementById("enemy-hp-bar-inner").style.width = `${Math.max(hpPercent, 0)}%`;
     document.getElementById("enemy-hp-text").innerText = `${Math.max(currentEnemy.hp, 0)} / ${currentEnemy.maxHp}`;
     document.getElementById("enemy-condition-text").innerText = currentEnemy.conditionText;
 }
-// (applyDamage - sem alterações)
-function applyDamage(damageValues) {
-    if (damageValues.length === 0 || currentEnemy.hp <= 0) { return; }
-    let totalMoveDamage = 0, totalValidDamage = 0;
-    for (const val of damageValues) {
-        totalMoveDamage += val;
-        if (currentEnemy.allowedMerges === null || currentEnemy.allowedMerges.includes(val)) {
-            totalValidDamage += val;
-        }
+function applyDamage(damageValues, targetMerges) {
+    if (currentEnemy.hp <= 0) return;
+    let totalValidDamage = 0;
+    let didResist = false;
+    let instantWin = false;
+    switch (currentEnemy.goalType) {
+        case 'HP_MERGE':
+        case 'BUILD_TILE':
+            if (damageValues.length > 0) {
+                for (const val of damageValues) {
+                    if (currentEnemy.goalValue === null || currentEnemy.goalValue.includes(val)) {
+                        if (currentEnemy.goalType === 'BUILD_TILE') {
+                            instantWin = true;
+                        } else {
+                            totalValidDamage += val;
+                        }
+                    } else {
+                        didResist = true;
+                    }
+                }
+            }
+            break;
+        case 'TARGET_MERGE':
+            if (targetMerges.length > 0) {
+                for (const val of targetMerges) {
+                    if (currentEnemy.goalValue.includes(val)) {
+                        instantWin = true;
+                        break;
+                    }
+                }
+            }
+            if (damageValues.length > 0) didResist = true;
+            break;
     }
     let conditionTextElement = document.getElementById("enemy-condition-text");
-    if (totalMoveDamage > totalValidDamage && totalMoveDamage > 0) {
+    if (didResist && !instantWin) {
         conditionTextElement.classList.add("condition-shake");
         setTimeout(() => { conditionTextElement.classList.remove("condition-shake"); }, 400);
     } else {
@@ -237,23 +358,23 @@ function applyDamage(damageValues) {
     if (totalValidDamage > 0) {
         currentEnemy.hp -= totalValidDamage;
         updateEnemyUI();
-        if (currentEnemy.hp <= 0) {
-            enemiesDefeated++;
-            clearBlockTimer();
-            clearDeleteTimer();
-            isInputLocked = true;
-            document.getElementById("enemy-defeated-text").innerText = `${currentEnemy.name} Derrotado!`;
-            document.getElementById("enemy-defeated-overlay").classList.add("visible");
-            setTimeout(() => {
-                document.getElementById("enemy-defeated-overlay").classList.remove("visible");
-                resetLevel(); 
-            }, 1500);
-        }
+    }
+    if (instantWin || currentEnemy.hp <= 0) {
+        currentEnemy.hp = 0;
+        enemiesDefeated++;
+        clearBlockTimer();
+        clearDeleteTimer();
+        isInputLocked = true;
+        document.getElementById("enemy-defeated-text").innerText = `${currentEnemy.name} Derrotado!`;
+        document.getElementById("enemy-defeated-overlay").classList.add("visible");
+        setTimeout(() => {
+            document.getElementById("enemy-defeated-overlay").classList.remove("visible");
+            resetLevel(); 
+        }, 1500);
     }
 }
 
 // --- LÓGICA DO 2048 ---
-// (updateBoardView - sem alterações)
 function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTiles = []) {
     const spawnedKeys = new Set(spawnedTiles.map(t => `${t.r}-${t.c}`));
     const mergedKeys = new Set(mergedTiles.map(t => `${t.r}-${t.c}`));
@@ -276,6 +397,14 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
                     if (mergedKeys.has(key)) tile.classList.add("tile-merged");
                 }
                 cell.append(tile);
+            } else if (value < -1) {
+                let posValue = Math.abs(value);
+                let tile = document.createElement("div");
+                tile.classList.add("tile");
+                tile.classList.add("tile-static");
+                tile.classList.add("tile-static-" + posValue);
+                tile.innerText = posValue;
+                cell.append(tile);
             } else if (value === -1) {
                 let tile = document.createElement("div");
                 tile.classList.add("tile");
@@ -290,7 +419,6 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
         }
     }
 }
-// (spawnNumber - sem alterações)
 function spawnNumber() {
     let emptyCells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] === 0) emptyCells.push({r, c});
@@ -303,17 +431,14 @@ function spawnNumber() {
 }
 
 // --- LÓGICA DE MOVIMENTO ---
-// (processMove - sem alterações)
 function processMove(slideResult, isFastMove) {
-    let { hasChanged, mergedTiles, totalDamageValues } = slideResult;
+    let { hasChanged, mergedTiles, totalDamageValues, targetMerges } = slideResult;
     let deletionsToApply = 0;
     if (hasChanged) {
         if (isFastMove) {
             deletionsToApply++;
         }
-        if (totalDamageValues.length > 0) {
-            noMergeStreak = 0;
-        } else {
+        if (totalDamageValues.length === 0 && targetMerges.length === 0) {
             if (boardHasTile(16)) {
                 noMergeStreak++;
                 if (noMergeStreak >= 3) {
@@ -321,8 +446,10 @@ function processMove(slideResult, isFastMove) {
                     noMergeStreak = 0;
                 }
             }
+        } else {
+            noMergeStreak = 0;
         }
-        applyDamage(totalDamageValues);
+        applyDamage(totalDamageValues, targetMerges);
         updateBoardView([], mergedTiles, [], []);
         if (currentEnemy.hp > 0) {
             if (deletionsToApply > 0) {
@@ -339,8 +466,6 @@ function processMove(slideResult, isFastMove) {
         scoreDisplay.innerText = 0;
     }
 }
-
-// ALTERADO: Lógica de input refatorada
 function handleKeyInput(e) {
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
@@ -348,7 +473,6 @@ function handleKeyInput(e) {
     if (isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
         return;
     }
-    
     let slideFn = null;
     switch(e.key) {
         case "ArrowLeft": slideFn = slideLeft; break;
@@ -357,26 +481,17 @@ function handleKeyInput(e) {
         case "ArrowDown": slideFn = slideDown; break;
         default: return;
     }
-    
-    // 1. Simula o movimento
-    let slideResult = slideFn(board); // Passa o 'board' global
-    
-    // 2. Se for válido, atualiza o 'board' global
+    let slideResult = slideFn(board);
     if (slideResult.hasChanged) {
         board = slideResult.board;
     }
-    
-    // 3. Processa o resultado
     processMove(slideResult, isFastMove);
 }
-
-// --- CONTROLE DE TOQUE ---
 function handleTouchStart(e) {
     e.preventDefault();
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 }
-// ALTERADO: Lógica de input refatorada
 function handleTouchEnd(e) {
     e.preventDefault();
     const now = Date.now();
@@ -387,14 +502,12 @@ function handleTouchEnd(e) {
     let touchEndY = e.changedTouches[0].clientY;
     handleSwipe(touchEndX, touchEndY, isFastMove);
 }
-// ALTERADO: Lógica de input refatorada
 function handleSwipe(endX, endY, isFastMove) {
     let deltaX = endX - touchStartX;
     let deltaY = endY - touchStartY;
     let absDeltaX = Math.abs(deltaX);
     let absDeltaY = Math.abs(deltaY);
     const minSwipeDistance = 30;
-    
     let slideFn = null;
     if (absDeltaX > absDeltaY) {
         if (absDeltaX > minSwipeDistance) {
@@ -405,23 +518,14 @@ function handleSwipe(endX, endY, isFastMove) {
             slideFn = (deltaY < 0) ? slideUp : slideDown;
         }
     }
-    
     if (slideFn) {
-        // 1. Simula o movimento
         let slideResult = slideFn(board);
-        
-        // 2. Se for válido, atualiza o 'board' global
         if (slideResult.hasChanged) {
             board = slideResult.board;
         }
-        
-        // 3. Processa o resultado
         processMove(slideResult, isFastMove);
     }
 }
-
-// --- Funções de Slide (ALTERADAS) ---
-// (boardHasTile - sem alterações)
 function boardHasTile(value) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -433,37 +537,49 @@ function boardHasTile(value) {
     return false;
 }
 
-// (slide - sem alterações)
+// --- Funções de Slide ---
 function slide(row) {
     let newRow = new Array(cols).fill(0);
     let mergedIndices = [];
     let moveDamageValues = [];
+    let targetMerges = [];
     let start = 0;
     for (let i = 0; i <= cols; i++) {
         if (i === cols || row[i] === -1) {
             let segment = row.slice(start, i);
-            let segmentLength = segment.length;
-            if (segmentLength === 0) { 
+            if (segment.length === 0) { 
                 if (i < cols) newRow[i] = -1;
                 start = i + 1;
                 continue;
             }
-            let filteredSegment = segment.filter(num => num > 0);
+            let filteredSegment = segment.filter(num => num !== 0); 
             let originalMergedIndices = [];
             for (let j = 0; j < filteredSegment.length - 1; j++) {
-                if (filteredSegment[j] === filteredSegment[j+1]) {
+                let current = filteredSegment[j];
+                let next = filteredSegment[j+1];
+                if (current > 0 && current === next) {
                     filteredSegment[j] *= 2;
                     moveDamageValues.push(filteredSegment[j]);
                     filteredSegment[j+1] = 0;
                     originalMergedIndices.push(j);
+                } 
+                else if (current > 0 && next < -1 && current === Math.abs(next)) {
+                    filteredSegment[j] = 0;
+                    filteredSegment[j+1] = 0;
+                    targetMerges.push(current);
+                }
+                else if (current < -1 && next > 0 && Math.abs(current) === next) {
+                    filteredSegment[j] = 0;
+                    filteredSegment[j+1] = 0;
+                    targetMerges.push(next);
                 }
             }
-            let slidSegment = filteredSegment.filter(num => num > 0);
+            let slidSegment = filteredSegment.filter(num => num !== 0);
             let slidMergedIndices = [];
             let mergeIdx = 0;
             for(let k=0; k < slidSegment.length; k++) {
-                while(mergeIdx < originalMergedIndices.length && filteredSegment.slice(0, originalMergedIndices[mergeIdx]+1).filter(n => n > 0).length <= k) mergeIdx++;
-                if (mergeIdx < originalMergedIndices.length && filteredSegment.slice(0, originalMergedIndices[mergeIdx]+1).filter(n => n > 0).length === k + 1) slidMergedIndices.push(k);
+                while(mergeIdx < originalMergedIndices.length && filteredSegment.slice(0, originalMergedIndices[mergeIdx]+1).filter(n => n !== 0).length <= k) mergeIdx++;
+                if (mergeIdx < originalMergedIndices.length && filteredSegment.slice(0, originalMergedIndices[mergeIdx]+1).filter(n => n !== 0).length === k + 1) slidMergedIndices.push(k);
             }
             let tileIdx = 0;
             for (let j = start; j < i; j++) {
@@ -479,87 +595,76 @@ function slide(row) {
             start = i + 1;
         }
     }
-    return { newRow, mergedIndices, moveDamageValues };
+    return { newRow, mergedIndices, moveDamageValues, targetMerges };
 }
-
-// ALTERADO: Funções de slide agora são "puras" (recebem 'inputBoard')
 function slideLeft(inputBoard) {
-    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
-    let hasChanged = false, mergedTiles = [], totalDamageValues = []; 
-    
+    let newBoard = JSON.parse(JSON.stringify(inputBoard));
+    let hasChanged = false, mergedTiles = [], totalDamageValues = [], totalTargetMerges = []; 
     for (let r = 0; r < rows; r++) {
-        let row = newBoard[r]; // Pega da cópia
-        let { newRow, mergedIndices, moveDamageValues } = slide(row);
-        newBoard[r] = newRow; // Modifica a cópia
+        let row = newBoard[r];
+        let { newRow, mergedIndices, moveDamageValues, targetMerges } = slide(row);
+        newBoard[r] = newRow;
         totalDamageValues.push(...moveDamageValues);
+        totalTargetMerges.push(...targetMerges);
         for (let c of mergedIndices) mergedTiles.push({r: r, c: c});
     }
-    
     hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
-    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues, targetMerges: totalTargetMerges };
 }
 function slideRight(inputBoard) {
-    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
-    let hasChanged = false, mergedTiles = [], totalDamageValues = [];
-    
+    let newBoard = JSON.parse(JSON.stringify(inputBoard));
+    let hasChanged = false, mergedTiles = [], totalDamageValues = [], totalTargetMerges = [];
     for (let r = 0; r < rows; r++) {
-        let row = newBoard[r]; // Pega da cópia
+        let row = newBoard[r];
         let reversedRow = row.reverse();
-        let { newRow: newReversedRow, mergedIndices: reversedMergedIndices, moveDamageValues } = slide(reversedRow);
+        let { newRow: newReversedRow, mergedIndices: reversedMergedIndices, moveDamageValues, targetMerges } = slide(reversedRow);
         totalDamageValues.push(...moveDamageValues); 
+        totalTargetMerges.push(...targetMerges);
         let newRow = newReversedRow.reverse();
-        newBoard[r] = newRow; // Modifica a cópia
+        newBoard[r] = newRow;
         for (let c_rev of reversedMergedIndices) mergedTiles.push({r: r, c: cols - 1 - c_rev});
     }
-    
     hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
-    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues, targetMerges: totalTargetMerges };
 }
 function slideUp(inputBoard) {
-    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
-    let hasChanged = false, mergedTiles = [], totalDamageValues = [];
-    
+    let newBoard = JSON.parse(JSON.stringify(inputBoard));
+    let hasChanged = false, mergedTiles = [], totalDamageValues = [], totalTargetMerges = [];
     for (let c = 0; c < cols; c++) {
         let column = [];
-        for (let r = 0; r < rows; r++) column.push(newBoard[r][c]); // Lê da cópia
-        
-        let { newRow: newColumn, mergedIndices, moveDamageValues } = slide(column);
+        for (let r = 0; r < rows; r++) column.push(newBoard[r][c]);
+        let { newRow: newColumn, mergedIndices, moveDamageValues, targetMerges } = slide(column);
         totalDamageValues.push(...moveDamageValues);
-        
+        totalTargetMerges.push(...targetMerges);
         for (let r_idx of mergedIndices) mergedTiles.push({r: r_idx, c: c});
         for (let r = 0; r < rows; r++) {
-            newBoard[r][c] = newColumn[r]; // Modifica a cópia
+            newBoard[r][c] = newColumn[r];
         }
     }
-    
     hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
-    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues, targetMerges: totalTargetMerges };
 }
 function slideDown(inputBoard) {
-    let newBoard = JSON.parse(JSON.stringify(inputBoard)); // Cópia
-    let hasChanged = false, mergedTiles = [], totalDamageValues = [];
-    
+    let newBoard = JSON.parse(JSON.stringify(inputBoard));
+    let hasChanged = false, mergedTiles = [], totalDamageValues = [], totalTargetMerges = [];
     for (let c = 0; c < cols; c++) {
         let column = [];
-        for (let r = 0; r < rows; r++) column.push(newBoard[r][c]); // Lê da cópia
-        
+        for (let r = 0; r < rows; r++) column.push(newBoard[r][c]);
         let reversedColumn = column.reverse();
-        let { newRow: newReversedColumn, mergedIndices: reversedMergedIndices, moveDamageValues } = slide(reversedColumn);
+        let { newRow: newReversedColumn, mergedIndices: reversedMergedIndices, moveDamageValues, targetMerges } = slide(reversedColumn);
         totalDamageValues.push(...moveDamageValues); 
+        totalTargetMerges.push(...targetMerges);
         let newColumn = newReversedColumn.reverse();
-        
         for (let r_rev of reversedMergedIndices) mergedTiles.push({r: rows - 1 - r_rev, c: c});
         for (let r = 0; r < rows; r++) {
-            newBoard[r][c] = newColumn[r]; // Modifica a cópia
+            newBoard[r][c] = newColumn[r];
         }
     }
-    
     hasChanged = JSON.stringify(newBoard) !== JSON.stringify(inputBoard);
-    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues };
+    return { board: newBoard, hasChanged, mergedTiles, totalDamageValues, targetMerges: totalTargetMerges };
 }
 
 // --- VERIFICAÇÃO DE FIM DE JOGO ---
-// (showGameOverOverlay, checkGameOver, checkWin - sem alterações)
 function showGameOverOverlay(message) {
     document.getElementById("game-over-text").innerText = message;
     let overlay = document.getElementById("game-over-overlay");
@@ -567,6 +672,7 @@ function showGameOverOverlay(message) {
     overlay.classList.add("visible");
     clearBlockTimer();
     clearDeleteTimer();
+    checkAndSaveHighScore();
 }
 function checkGameOver() {
     if (gameWon || document.getElementById("game-over-overlay").classList.contains("visible")) { return; }
@@ -582,13 +688,31 @@ function checkGameOver() {
         if (hasEmptyCell) break;
     }
     if (hasEmptyCell) { return; }
-    for (let r = 0; r < rows; r++) { for (let c = 0; c < cols - 1; c++) { if (board[r][c] > 0 && board[r][c] === board[r][c+1]) return; } }
-    for (let c = 0; c < cols; c++) { for (let r = 0; r < rows - 1; r++) { if (board[r][c] > 0 && board[r][c] === board[r+1][c]) return; } }
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols - 1; c++) {
+            let curr = board[r][c];
+            let next = board[r][c+1];
+            if (curr > 0 && curr === next) return;
+            if (curr > 0 && next < -1 && curr === Math.abs(next)) return;
+            if (curr < -1 && next > 0 && Math.abs(curr) === next) return;
+        }
+    }
+    for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < rows - 1; r++) {
+            let curr = board[r][c];
+            let next = board[r+1][c];
+            if (curr > 0 && curr === next) return;
+            if (curr > 0 && next < -1 && curr === Math.abs(next)) return;
+            if (curr < -1 && next > 0 && Math.abs(curr) === next) return;
+        }
+    }
     showGameOverOverlay("Sem movimentos!");
 }
 function checkWin() {
     if (gameWon) return;
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-        if (board[r][c] === 2048) { alert("Você Venceu! (o 2048)"); gameWon = true; }
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c] === 2048) { alert("Você Venceu! (o 2048)"); gameWon = true; }
+        }
     }
 }
