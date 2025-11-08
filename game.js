@@ -1,19 +1,29 @@
 // game.js
 const HIGH_SCORE_KEY = "rpg2048-highScore";
-const THEME_KEY = "rpg2048-theme"; // NOVO
+const THEME_KEY = "rpg2048-theme";
 
-// NOVO: Variáveis para o tema
+// Variáveis de Tema
 let themeToggle;
 let bodyElement;
 
+// Variáveis de estado de pausa
+let isGamePaused = false; // O jogo começa ativo
+let pauseButton;
+
+// ALTERADO: Ordem de execução corrigida
 window.onload = function() {
-    restartGame(); 
-    document.getElementById("restart-btn").addEventListener("click", restartGame);
-    
-    // NOVO: Lógica do Tema
+    // 1. Define as variáveis globais primeiro
     themeToggle = document.getElementById("theme-toggle");
     bodyElement = document.body;
+    pauseButton = document.getElementById("pause-btn");
+
+    // 2. Adiciona os event listeners
+    document.getElementById("restart-btn").addEventListener("click", restartGame);
     themeToggle.addEventListener("change", toggleTheme);
+    pauseButton.addEventListener("click", togglePause);
+    
+    // 3. Agora, inicia o jogo e carrega o tema
+    restartGame(); 
     loadTheme();
 }
 
@@ -45,12 +55,11 @@ let lastMoveTimestamp = 0;
 let noMergeStreak = 0;
 
 
-// --- NOVO: Funções de Tema ---
+// --- Funções de Tema ---
 function loadTheme() {
     const savedTheme = localStorage.getItem(THEME_KEY);
-    applyTheme(savedTheme || 'light'); // Padrão é 'light'
+    applyTheme(savedTheme || 'light');
 }
-
 function applyTheme(theme) {
     if (theme === 'dark') {
         bodyElement.classList.add("dark-theme");
@@ -59,19 +68,50 @@ function applyTheme(theme) {
         bodyElement.classList.remove("dark-theme");
         themeToggle.checked = false;
     }
-    // Guarda a preferência
     localStorage.setItem(THEME_KEY, theme);
-    
-    // NOVO: Atualiza a cor do tema do PWA
-    // (Isto muda a cor da barra de status no telemóvel)
     const newThemeColor = (theme === 'dark') ? '#424242' : '#bbada0';
     document.querySelector('meta[name="theme-color"]').setAttribute('content', newThemeColor);
 }
-
 function toggleTheme() {
     applyTheme(themeToggle.checked ? 'dark' : 'light');
 }
-// --- FIM Funções de Tema ---
+
+// --- Funções de Pausa (CORRIGIDAS) ---
+function setPauseOverlay(visible) {
+    const overlay = document.getElementById("game-over-overlay");
+    const text = document.getElementById("game-over-text");
+    
+    if (visible) {
+        text.innerText = "Pausado";
+        overlay.classList.add("visible");
+        overlay.classList.remove("hidden");
+    } else {
+        overlay.classList.add("hidden");
+        overlay.classList.remove("visible");
+    }
+}
+function togglePause() {
+    // Não pode pausar se o jogo já tiver acabado
+    if (document.getElementById("game-over-overlay").classList.contains("visible") && document.getElementById("game-over-text").innerText !== "Pausado") {
+        return;
+    }
+    
+    isGamePaused = !isGamePaused;
+    
+    if (isGamePaused) {
+        // Pausa o jogo
+        clearBlockTimer();
+        clearDeleteTimer();
+        setPauseOverlay(true); // Mostra "Pausado"
+        pauseButton.innerText = "▶";
+    } else {
+        // Retoma o jogo
+        setPauseOverlay(false); // Esconde "Pausado"
+        startBlockTimer();
+        scheduleDeleteAttack();
+        pauseButton.innerText = "II";
+    }
+}
 
 
 // --- Funções de Recorde Local ---
@@ -85,9 +125,6 @@ function checkAndSaveHighScore() {
         loadLocalHighScore();
     }
 }
-
-// ... (O resto do seu game.js, de clearBlockTimer() até o final, 
-//      permanece exatamente o mesmo da última vez) ...
 
 // --- FUNÇÕES DE TIMER DE ATAQUE ---
 function clearBlockTimer() { if (blockAttackTimer) { clearInterval(blockAttackTimer); blockAttackTimer = null; } }
@@ -104,7 +141,8 @@ function scheduleDeleteAttack() {
 
 // --- FUNÇÕES DE ATAQUE ---
 function blockSlotAttack() {
-    if (isInputLocked || blockedSlots.length >= maxBlocks) return; 
+    // ALTERADO: Verifica se está pausado
+    if (isInputLocked || isGamePaused || blockedSlots.length >= maxBlocks) return; 
     let availableSlots = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] >= 0) availableSlots.push({r, c});
     if (availableSlots.length === 0) return;
@@ -127,7 +165,8 @@ function unblockSlot(slotToUnblock) {
     updateBoardView([], [], [], []);
 }
 function applyPunishmentDeletions(count, onCompleteCallback) {
-    if (isInputLocked || currentEnemy.hp <= 0 || count <= 0) {
+    // ALTERADO: Verifica se está pausado
+    if (isInputLocked || isGamePaused || currentEnemy.hp <= 0 || count <= 0) {
         if (onCompleteCallback) onCompleteCallback();
         return;
     }
@@ -150,15 +189,10 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
         }
         const rand = Math.random();
         let chosenBucket;
-        if (rand < 0.90) { // 90%
-            chosenBucket = buckets.low;
-        } else if (rand < 0.95) { // 5%
-            chosenBucket = buckets.mid;
-        } else if (rand < 0.98) { // 3%
-            chosenBucket = buckets.high;
-        } else { // 2%
-            chosenBucket = buckets.epic;
-        }
+        if (rand < 0.90) { chosenBucket = buckets.low; }
+        else if (rand < 0.95) { chosenBucket = buckets.mid; }
+        else if (rand < 0.98) { chosenBucket = buckets.high; }
+        else { chosenBucket = buckets.epic; }
         if (chosenBucket.length === 0) {
             if (buckets.low.length > 0) chosenBucket = buckets.low;
             else if (buckets.mid.length > 0) chosenBucket = buckets.mid;
@@ -201,6 +235,7 @@ function restartGame() {
     noMergeStreak = 0;
     resetLevel();
 }
+// ALTERADO: Lógica de "Começar Pausado" REMOVIDA
 function resetLevel() {
     board = [ [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0] ];
     gameWon = false;
@@ -211,17 +246,28 @@ function resetLevel() {
     blockedSlots = [];
     isInputLocked = false;
     noMergeStreak = 0;
+    
+    // O jogo não começa pausado
+    isGamePaused = false; 
+    
     const speedFactor = Math.pow(0.95, enemiesDefeated);
     maxBlocks = Math.min(3, 1 + Math.floor(enemiesDefeated / 4));
     currentBlockInterval = Math.max(2000, BLOCK_INTERVAL_START * speedFactor);
     currentDeleteMin = Math.max(10000, DELETE_DELAY_MIN_START * speedFactor);
     currentDeleteMax = Math.max(15000, DELETE_DELAY_MAX_START * speedFactor);
+    
+    // Esconde o overlay
     document.getElementById("game-over-overlay").classList.remove("visible");
+    document.getElementById("game-over-overlay").classList.add("hidden");
+    pauseButton.innerText = "II";
+    
     document.getElementById("enemy-defeated-overlay").classList.remove("visible");
     document.getElementById("enemy-condition-text").classList.remove("condition-shake");
+    
     loadLocalHighScore();
     spawnNewEnemy();
-    updateEnemyUI();
+    updateEnemyUI(); // Chama imediatamente
+    
     const gameBoard = document.getElementById("game-board");
     gameBoard.innerHTML = ""; 
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -230,18 +276,23 @@ function resetLevel() {
         cell.id = `grid-cell-${r}-${c}`; 
         gameBoard.append(cell);
     }
+    
     document.removeEventListener("keyup", handleKeyInput);
     document.addEventListener("keyup", handleKeyInput);
     gameBoard.removeEventListener('touchstart', handleTouchStart);
     gameBoard.addEventListener('touchstart', handleTouchStart, { passive: false });
     gameBoard.removeEventListener('touchend', handleTouchEnd);
     gameBoard.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
     let spawned1 = spawnNumber();
     let spawned2 = spawnNumber();
     updateBoardView([spawned1, spawned2], [], [], []);
+    
+    // Os timers começam imediatamente
     startBlockTimer();
     scheduleDeleteAttack();
 }
+// (spawnNewEnemy - sem alterações)
 function spawnNewEnemy() {
     let name = `Inimigo Nível ${enemiesDefeated + 1}`;
     let hp = Math.floor(100 * Math.pow(1.2, enemiesDefeated));
@@ -293,6 +344,7 @@ function spawnNewEnemy() {
     }
     document.getElementById("enemy-name").innerText = currentEnemy.name;
 }
+// (placeStaticTile - sem alterações)
 function placeStaticTile(value) {
     let emptyCells = [];
     for (let r = 0; r < rows; r++) {
@@ -307,12 +359,14 @@ function placeStaticTile(value) {
         board[r][c] = -value; 
     }
 }
+// (updateEnemyUI - sem alterações)
 function updateEnemyUI() {
     const hpPercent = (currentEnemy.hp / currentEnemy.maxHp) * 100;
     document.getElementById("enemy-hp-bar-inner").style.width = `${Math.max(hpPercent, 0)}%`;
     document.getElementById("enemy-hp-text").innerText = `${Math.max(currentEnemy.hp, 0)} / ${currentEnemy.maxHp}`;
     document.getElementById("enemy-condition-text").innerText = currentEnemy.conditionText;
 }
+// (applyDamage - sem alterações)
 function applyDamage(damageValues, targetMerges) {
     if (currentEnemy.hp <= 0) return;
     let totalValidDamage = 0;
@@ -375,6 +429,7 @@ function applyDamage(damageValues, targetMerges) {
 }
 
 // --- LÓGICA DO 2048 ---
+// (updateBoardView - sem alterações)
 function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTiles = []) {
     const spawnedKeys = new Set(spawnedTiles.map(t => `${t.r}-${t.c}`));
     const mergedKeys = new Set(mergedTiles.map(t => `${t.r}-${t.c}`));
@@ -419,6 +474,7 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
         }
     }
 }
+// (spawnNumber - sem alterações)
 function spawnNumber() {
     let emptyCells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] === 0) emptyCells.push({r, c});
@@ -431,8 +487,10 @@ function spawnNumber() {
 }
 
 // --- LÓGICA DE MOVIMENTO ---
+// ALTERADO: Lógica de "Start Game" removida
 function processMove(slideResult, isFastMove) {
     let { hasChanged, mergedTiles, totalDamageValues, targetMerges } = slideResult;
+    
     let deletionsToApply = 0;
     if (hasChanged) {
         if (isFastMove) {
@@ -466,13 +524,18 @@ function processMove(slideResult, isFastMove) {
         scoreDisplay.innerText = 0;
     }
 }
+
+// ALTERADO: Verificação de pausa
 function handleKeyInput(e) {
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
     lastMoveTimestamp = now;
-    if (isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
+    
+    // CORRIGIDO: Verifica se está pausado ou input bloqueado
+    if (isGamePaused || isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
         return;
     }
+    
     let slideFn = null;
     switch(e.key) {
         case "ArrowLeft": slideFn = slideLeft; break;
@@ -487,21 +550,31 @@ function handleKeyInput(e) {
     }
     processMove(slideResult, isFastMove);
 }
+
+// --- CONTROLE DE TOQUE ---
+// (handleTouchStart - sem alterações)
 function handleTouchStart(e) {
     e.preventDefault();
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 }
+// ALTERADO: Verificação de pausa
 function handleTouchEnd(e) {
     e.preventDefault();
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
     lastMoveTimestamp = now;
-    if (isInputLocked) return;
+    
+    // CORRIGIDO: Verifica se está pausado ou input bloqueado
+    if (isGamePaused || isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
+        return;
+    }
+    
     let touchEndX = e.changedTouches[0].clientX;
     let touchEndY = e.changedTouches[0].clientY;
     handleSwipe(touchEndX, touchEndY, isFastMove);
 }
+// (handleSwipe - sem alterações)
 function handleSwipe(endX, endY, isFastMove) {
     let deltaX = endX - touchStartX;
     let deltaY = endY - touchStartY;
@@ -526,6 +599,7 @@ function handleSwipe(endX, endY, isFastMove) {
         processMove(slideResult, isFastMove);
     }
 }
+// (boardHasTile - sem alterações)
 function boardHasTile(value) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -538,6 +612,7 @@ function boardHasTile(value) {
 }
 
 // --- Funções de Slide ---
+// (slide, slideLeft, slideRight, slideUp, slideDown - sem alterações)
 function slide(row) {
     let newRow = new Array(cols).fill(0);
     let mergedIndices = [];
@@ -672,10 +747,15 @@ function showGameOverOverlay(message) {
     overlay.classList.add("visible");
     clearBlockTimer();
     clearDeleteTimer();
+    isGamePaused = true;
     checkAndSaveHighScore();
 }
+// CORRIGIDO: Verificação de Fim de Jogo
 function checkGameOver() {
-    if (gameWon || document.getElementById("game-over-overlay").classList.contains("visible")) { return; }
+    // Não verifica se o overlay já está visível
+    if (gameWon || document.getElementById("game-over-overlay").classList.contains("visible")) { 
+        return; 
+    }
     let hasTiles = false;
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) { if (board[r][c] > 0) { hasTiles = true; break; } }
@@ -708,6 +788,7 @@ function checkGameOver() {
     }
     showGameOverOverlay("Sem movimentos!");
 }
+// (checkWin - sem alterações)
 function checkWin() {
     if (gameWon) return;
     for (let r = 0; r < rows; r++) {
