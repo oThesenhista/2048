@@ -113,7 +113,7 @@ h1 {
     opacity: 0.5;
 }
 
-#pause-btn { /* Corrigido de .pause-btn para #pause-btn */
+#pause-btn {
     font-size: 40px;
     font-weight: 900;
     border: none;
@@ -145,7 +145,6 @@ h1 {
 }
 
 /* --- Sobreposições --- */
-/* (Os estilos não mudam, mas agora aplicam-se ao wrapper) */
 #game-over-overlay {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     background-color: var(--color-overlay-bg);
@@ -191,12 +190,12 @@ h1 {
     margin-top: 10px;
 }
 
-/* --- NOVO: Wrapper da Área de Jogo --- */
+/* --- Wrapper da Área de Jogo --- */
 #game-area-wrapper {
     width: 95%;
     max-width: 430px;
     margin: 0 auto;
-    position: relative; /* Esta é a linha mais importante! */
+    position: relative;
 }
 
 /* --- ESTILOS DO TABULEIRO --- */
@@ -205,10 +204,10 @@ h1 {
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(4, 1fr);
     gap: 15px;
-    width: 100%; /* O wrapper agora controla o max-width */
-    height: 95vw; /* (Mantido para proporção 1:1) */
+    width: 100%;
+    height: 95vw;
     max-height: 430px;
-    margin: 0 auto; /* Removida margem de cima/baixo */
+    margin: 0 auto;
     padding: 15px;
     background-color: var(--color-grid-bg);
     border-radius: 6px;
@@ -304,23 +303,15 @@ h1 {
 
 
 /* --- Recorde Local --- */
-#local-record-container {
-    width: 95%;
-    max-width: 430px;
-    margin: 20px auto;
-    padding: 15px 25px;
-    background-color: var(--color-button);
-    border-radius: 3px;
-    color: white;
-    font-weight: bold;
-    font-size: clamp(1.1rem, 4vw, 1.25rem);
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    transition: background-color 0.3s ease;
+.score-ul {
+    list-style: none; 
+    text-align: left; 
+    padding: 0; 
+    margin: 0;
 }
-#local-high-score {
-    color: var(--color-text-secondary);
+.score-li-max {
+    font-size: 0.9em;
+    opacity: 0.5;
 }
 
 
@@ -371,4 +362,18 @@ input:checked + .slider:before {
 }
 .slider.round:before {
     border-radius: 50%;
+}
+
+/* NOVO: Esconde a barra de HP para objetivos sem HP */
+.no-hp-goal #enemy-hp-bar-outer {
+    display: none;
+}
+.no-hp-goal #enemy-hp-text {
+    display: none;
+}
+/* Alinha o texto da condição quando a barra de HP some */
+.no-hp-goal #enemy-condition-text {
+    margin-top: 0;
+    padding-top: 15px; /* Adiciona o padding que a barra de HP tinha */
+    padding-bottom: 15px;
 }

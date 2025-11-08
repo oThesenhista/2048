@@ -7,22 +7,19 @@ let themeToggle;
 let bodyElement;
 
 // Variáveis de estado de pausa
-let isGamePaused = false; // O jogo começa ativo
+let isGamePaused = false;
 let pauseButton;
 
-// ALTERADO: Ordem de execução corrigida
+// Ordem de execução corrigida
 window.onload = function() {
-    // 1. Define as variáveis globais primeiro
     themeToggle = document.getElementById("theme-toggle");
     bodyElement = document.body;
     pauseButton = document.getElementById("pause-btn");
 
-    // 2. Adiciona os event listeners
     document.getElementById("restart-btn").addEventListener("click", restartGame);
     themeToggle.addEventListener("change", toggleTheme);
     pauseButton.addEventListener("click", togglePause);
     
-    // 3. Agora, inicia o jogo e carrega o tema
     restartGame(); 
     loadTheme();
 }
@@ -43,10 +40,11 @@ let deleteAttackTimer = null;
 const BLOCK_INTERVAL_START = 6000;
 const DELETE_DELAY_MIN_START = 15000;
 const DELETE_DELAY_MAX_START = 45000;
-const BLOCK_DURATION = 3000;
+const BLOCK_DURATION_START = 3000;
 let currentBlockInterval;
 let currentDeleteMin;
 let currentDeleteMax;
+let currentBlockDuration;
 let blockedSlots = [];
 let maxBlocks = 1;
 let isInputLocked = false;
@@ -76,7 +74,7 @@ function toggleTheme() {
     applyTheme(themeToggle.checked ? 'dark' : 'light');
 }
 
-// --- Funções de Pausa (CORRIGIDAS) ---
+// --- Funções de Pausa ---
 function setPauseOverlay(visible) {
     const overlay = document.getElementById("game-over-overlay");
     const text = document.getElementById("game-over-text");
@@ -91,22 +89,17 @@ function setPauseOverlay(visible) {
     }
 }
 function togglePause() {
-    // Não pode pausar se o jogo já tiver acabado
     if (document.getElementById("game-over-overlay").classList.contains("visible") && document.getElementById("game-over-text").innerText !== "Pausado") {
         return;
     }
-    
     isGamePaused = !isGamePaused;
-    
     if (isGamePaused) {
-        // Pausa o jogo
         clearBlockTimer();
         clearDeleteTimer();
-        setPauseOverlay(true); // Mostra "Pausado"
+        setPauseOverlay(true);
         pauseButton.innerText = "▶";
     } else {
-        // Retoma o jogo
-        setPauseOverlay(false); // Esconde "Pausado"
+        setPauseOverlay(false);
         startBlockTimer();
         scheduleDeleteAttack();
         pauseButton.innerText = "II";
@@ -141,7 +134,6 @@ function scheduleDeleteAttack() {
 
 // --- FUNÇÕES DE ATAQUE ---
 function blockSlotAttack() {
-    // ALTERADO: Verifica se está pausado
     if (isInputLocked || isGamePaused || blockedSlots.length >= maxBlocks) return; 
     let availableSlots = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] >= 0) availableSlots.push({r, c});
@@ -151,7 +143,7 @@ function blockSlotAttack() {
     blockedSlots.push(newBlockedSlot);
     board[r][c] = -1;
     updateBoardView([], [], [], [newBlockedSlot]); 
-    setTimeout(() => unblockSlot(newBlockedSlot), BLOCK_DURATION);
+    setTimeout(() => unblockSlot(newBlockedSlot), currentBlockDuration); 
 }
 function deletePieceAttack() {
     applyPunishmentDeletions(1, scheduleDeleteAttack);
@@ -164,8 +156,39 @@ function unblockSlot(slotToUnblock) {
     blockedSlots = blockedSlots.filter(s => s.r !== r || s.c !== c);
     updateBoardView([], [], [], []);
 }
+
+// (Função selectTileToPunish - sem alterações)
+function selectTileToPunish(boardState) {
+    let buckets = { low: [], mid: [], high: [], epic: [] };
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const val = boardState[r][c];
+            if (val > 0) {
+                const tile = {r, c, val};
+                if (val >= 256) buckets.epic.push(tile);
+                else if (val >= 64) buckets.high.push(tile);
+                else if (val >= 16) buckets.mid.push(tile);
+                else buckets.low.push(tile);
+            }
+        }
+    }
+    const rand = Math.random();
+    let chosenBucket;
+    if (rand < 0.90) { chosenBucket = buckets.low; }
+    else if (rand < 0.95) { chosenBucket = buckets.mid; }
+    else if (rand < 0.98) { chosenBucket = buckets.high; }
+    else { chosenBucket = buckets.epic; }
+    if (chosenBucket.length === 0) {
+        if (buckets.low.length > 0) chosenBucket = buckets.low;
+        else if (buckets.mid.length > 0) chosenBucket = buckets.mid;
+        else if (buckets.high.length > 0) chosenBucket = buckets.high;
+        else if (buckets.epic.length > 0) chosenBucket = buckets.epic;
+        else return null;
+    }
+    return chosenBucket[Math.floor(Math.random() * chosenBucket.length)];
+}
+// (applyPunishmentDeletions - sem alterações)
 function applyPunishmentDeletions(count, onCompleteCallback) {
-    // ALTERADO: Verifica se está pausado
     if (isInputLocked || isGamePaused || currentEnemy.hp <= 0 || count <= 0) {
         if (onCompleteCallback) onCompleteCallback();
         return;
@@ -174,33 +197,14 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
     let tilesToDelete = [];
     let tempBoard = JSON.parse(JSON.stringify(board)); 
     for (let i = 0; i < count; i++) {
-        let buckets = { low: [], mid: [], high: [], epic: [] };
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const val = tempBoard[r][c];
-                if (val > 0) {
-                    const tile = {r, c, val};
-                    if (val >= 256) buckets.epic.push(tile);
-                    else if (val >= 64) buckets.high.push(tile);
-                    else if (val >= 16) buckets.mid.push(tile);
-                    else buckets.low.push(tile);
-                }
+        let tileToPick = selectTileToPunish(tempBoard);
+        if (!tileToPick) break; 
+        if (tileToPick.val > 128) {
+            let deflectedTile = selectTileToPunish(tempBoard);
+            if (deflectedTile) {
+                tileToPick = deflectedTile;
             }
         }
-        const rand = Math.random();
-        let chosenBucket;
-        if (rand < 0.90) { chosenBucket = buckets.low; }
-        else if (rand < 0.95) { chosenBucket = buckets.mid; }
-        else if (rand < 0.98) { chosenBucket = buckets.high; }
-        else { chosenBucket = buckets.epic; }
-        if (chosenBucket.length === 0) {
-            if (buckets.low.length > 0) chosenBucket = buckets.low;
-            else if (buckets.mid.length > 0) chosenBucket = buckets.mid;
-            else if (buckets.high.length > 0) chosenBucket = buckets.high;
-            else if (buckets.epic.length > 0) chosenBucket = buckets.epic;
-            else break;
-        }
-        let tileToPick = chosenBucket[Math.floor(Math.random() * chosenBucket.length)];
         tilesToDelete.push(tileToPick);
         tempBoard[tileToPick.r][tileToPick.c] = 0; 
     }
@@ -225,6 +229,7 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
     }, 600);
 }
 
+
 // --- LÓGICA PRINCIPAL DO JOGO ---
 function restartGame() {
     enemiesDefeated = 0;
@@ -235,7 +240,7 @@ function restartGame() {
     noMergeStreak = 0;
     resetLevel();
 }
-// ALTERADO: Lógica de "Começar Pausado" REMOVIDA
+// (resetLevel - sem alterações)
 function resetLevel() {
     board = [ [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0] ];
     gameWon = false;
@@ -246,28 +251,23 @@ function resetLevel() {
     blockedSlots = [];
     isInputLocked = false;
     noMergeStreak = 0;
-    
-    // O jogo não começa pausado
     isGamePaused = false; 
-    
     const speedFactor = Math.pow(0.95, enemiesDefeated);
     maxBlocks = Math.min(3, 1 + Math.floor(enemiesDefeated / 4));
+    if (maxBlocks === 1) currentBlockDuration = BLOCK_DURATION_START;
+    else if (maxBlocks === 2) currentBlockDuration = 2500;
+    else currentBlockDuration = 2000;
     currentBlockInterval = Math.max(2000, BLOCK_INTERVAL_START * speedFactor);
     currentDeleteMin = Math.max(10000, DELETE_DELAY_MIN_START * speedFactor);
     currentDeleteMax = Math.max(15000, DELETE_DELAY_MAX_START * speedFactor);
-    
-    // Esconde o overlay
     document.getElementById("game-over-overlay").classList.remove("visible");
     document.getElementById("game-over-overlay").classList.add("hidden");
     pauseButton.innerText = "II";
-    
     document.getElementById("enemy-defeated-overlay").classList.remove("visible");
     document.getElementById("enemy-condition-text").classList.remove("condition-shake");
-    
     loadLocalHighScore();
     spawnNewEnemy();
-    updateEnemyUI(); // Chama imediatamente
-    
+    updateEnemyUI();
     const gameBoard = document.getElementById("game-board");
     gameBoard.innerHTML = ""; 
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -276,69 +276,94 @@ function resetLevel() {
         cell.id = `grid-cell-${r}-${c}`; 
         gameBoard.append(cell);
     }
-    
     document.removeEventListener("keyup", handleKeyInput);
     document.addEventListener("keyup", handleKeyInput);
     gameBoard.removeEventListener('touchstart', handleTouchStart);
     gameBoard.addEventListener('touchstart', handleTouchStart, { passive: false });
     gameBoard.removeEventListener('touchend', handleTouchEnd);
     gameBoard.addEventListener('touchend', handleTouchEnd, { passive: false });
-    
     let spawned1 = spawnNumber();
     let spawned2 = spawnNumber();
     updateBoardView([spawned1, spawned2], [], [], []);
-    
-    // Os timers começam imediatamente
     startBlockTimer();
     scheduleDeleteAttack();
 }
-// (spawnNewEnemy - sem alterações)
+
+// --- Grupos de Desafio (ALTERADO) ---
+const challengePools = {
+    easy: [
+        { hp: 64, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 64 de dano" },
+        // CORRIGIDO: Era 'MERGE_LIST' (vitória instantânea), agora é 'HP_FILTERED'
+        { hp: 64, goalType: 'HP_FILTERED', goalValue: [4, 8], text: "Condição: Cause 64 de dano (Apenas 4, 8)" },
+        { hp: 128, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 128 de dano" },
+        { hp: 1, goalType: 'TARGET_MERGE', goalValue: [16], text: "Condição: Combine com o 16" },
+        { hp: 1, goalType: 'BUILD_TILE', goalValue: [32], text: "Condição: Crie um 32" },
+    ],
+    boss_1: { hp: 1, goalType: 'BUILD_TILE', goalValue: [128], text: "CHEFE: Crie um 128!" },
+    medium: [
+        { hp: 256, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 256 de dano" },
+        { hp: 256, goalType: 'HP_FILTERED', goalValue: [16, 32], text: "Condição: Dano Apenas com 16 ou 32" },
+        { hp: 1, goalType: 'TARGET_MERGE', goalValue: [32], text: "Condição: Combine com o 32" },
+        { hp: 1, goalType: 'BUILD_TILE', goalValue: [64], text: "Condição: Crie um 64" },
+        { hp: 1, goalType: 'TARGET_MERGE', goalValue: [16, 16], text: "Condição: Combine com os dois 16" },
+    ],
+    boss_2: { hp: 1, goalType: 'BUILD_TILE', goalValue: [256], text: "CHEFE: Crie um 256!" },
+    hard: [
+        { hp: 512, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 512 de dano" },
+        { hp: 512, goalType: 'HP_FILTERED', goalValue: [64, 128], text: "Condição: Dano Apenas com 64 ou 128" },
+        { hp: 1, goalType: 'TARGET_MERGE', goalValue: [64], text: "Condição: Combine com o 64" },
+        { hp: 1, goalType: 'TARGET_MERGE', goalValue: [32, 32], text: "Condição: Combine com os dois 32" },
+    ],
+    boss_3: { hp: 1, goalType: 'BUILD_TILE', goalValue: [512], text: "CHEFE: Crie um 512!" },
+    epic: [
+        { hp: 1024, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 1024 de dano" },
+        { hp: 1024, goalType: 'HP_FILTERED', goalValue: [128, 256], text: "Condição: Dano Apenas com 128 ou 256" },
+        { hp: 1, goalType: 'TARGET_MERGE', goalValue: [64, 64], text: "Condição: Combine com os dois 64" },
+        { hp: 1, goalType: 'BUILD_TILE', goalValue: [512], text: "Condição: Crie um 512" },
+    ],
+    boss_4: { hp: 1, goalType: 'BUILD_TILE', goalValue: [1024], text: "CHEFE: Crie um 1024!" }
+};
+function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ALTERADO: Adiciona 'targetsToHit'
 function spawnNewEnemy() {
     let name = `Inimigo Nível ${enemiesDefeated + 1}`;
-    let hp = Math.floor(100 * Math.pow(1.2, enemiesDefeated));
-    let enemyRules = {};
-    const goalTypeIndex = enemiesDefeated % 3; 
-    enemyRules = { 
-        hp: hp, 
-        goalType: 'HP_MERGE',
-        goalValue: null,
-        text: "Condição: Nenhuma" 
-    };
-    if (enemiesDefeated === 2) {
-        enemyRules = { hp: 150, goalType: 'HP_MERGE', goalValue: [4, 8], text: "Dano: Apenas 4 ou 8" };
-    } else if (enemiesDefeated === 3) {
-        enemyRules = { hp: 1, goalType: 'BUILD_TILE', goalValue: [128], text: "Condição: Crie um 128" };
-    } else if (enemiesDefeated === 4) {
-        enemyRules = { hp: 1, goalType: 'TARGET_MERGE', goalValue: [16], text: "Condição: Combine com o 16" };
-    } else if (enemiesDefeated === 5) {
-        enemyRules = { hp: 220, goalType: 'HP_MERGE', goalValue: [16, 32], text: "Dano: Apenas 16 ou 32" };
-    } else if (enemiesDefeated === 6) {
-        enemyRules = { hp: 1, goalType: 'BUILD_TILE', goalValue: [256], text: "Condição: Crie um 256" };
-    } else if (enemiesDefeated === 7) {
-        enemyRules = { hp: 1, goalType: 'TARGET_MERGE', goalValue: [32, 64], text: "Condição: Combine com o 32 ou 64" };
-    } else if (enemiesDefeated >= 8) {
-        switch (goalTypeIndex) {
-            case 0:
-                enemyRules = { hp: hp, goalType: 'HP_MERGE', goalValue: [32, 64, 128], text: "Dano: 32, 64 ou 128" };
-                break;
-            case 1:
-                enemyRules = { hp: 1, goalType: 'BUILD_TILE', goalValue: [512], text: "Condição: Crie um 512" };
-                break;
-            case 2:
-                enemyRules = { hp: 1, goalType: 'TARGET_MERGE', goalValue: [64], text: "Condição: Combine com o 64" };
-                break;
+    let enemyRules;
+    if ((enemiesDefeated + 1) % 10 === 0) {
+        const bossLevel = (enemiesDefeated + 1) / 10;
+        if (bossLevel === 1) enemyRules = challengePools.boss_1;
+        else if (bossLevel === 2) enemyRules = challengePools.boss_2;
+        else if (bossLevel === 3) enemyRules = challengePools.boss_3;
+        else enemyRules = challengePools.boss_4;
+    } else {
+        if (enemiesDefeated < 9) {
+            enemyRules = pickRandom(challengePools.easy);
+        } else if (enemiesDefeated < 19) {
+            enemyRules = pickRandom(challengePools.medium);
+        } else if (enemiesDefeated < 29) {
+            enemyRules = pickRandom(challengePools.hard);
+        } else {
+            enemyRules = pickRandom(challengePools.epic);
         }
+    }
+    let finalHP = enemyRules.hp;
+    if (enemyRules.goalType !== 'HP_DAMAGE' && enemyRules.goalType !== 'HP_FILTERED') {
+        finalHP = 1;
     }
     currentEnemy = {
         name: name,
-        hp: enemyRules.hp,
-        maxHp: enemyRules.hp,
+        hp: finalHP,
+        maxHp: finalHP,
         goalType: enemyRules.goalType,
         goalValue: enemyRules.goalValue,
-        conditionText: enemyRules.text
+        originalText: enemyRules.text,
+        // CORRIGIDO: Cria uma cópia do array de alvos para podermos modificá-lo
+        targetsToHit: (enemyRules.goalType === 'TARGET_MERGE') ? [...enemyRules.goalValue] : [],
     };
     if (currentEnemy.goalType === 'TARGET_MERGE') {
-        currentEnemy.goalValue.forEach(value => {
+        currentEnemy.targetsToHit.forEach(value => { // Usa a cópia
             placeStaticTile(value);
         });
     }
@@ -347,60 +372,97 @@ function spawnNewEnemy() {
 // (placeStaticTile - sem alterações)
 function placeStaticTile(value) {
     let emptyCells = [];
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (board[r][c] === 0) {
-                emptyCells.push({r, c});
-            }
-        }
-    }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] === 0) emptyCells.push({r, c});
     if (emptyCells.length > 0) {
         let {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
         board[r][c] = -value; 
     }
 }
-// (updateEnemyUI - sem alterações)
+
+// ALTERADO: Atualiza o progresso do alvo
 function updateEnemyUI() {
-    const hpPercent = (currentEnemy.hp / currentEnemy.maxHp) * 100;
-    document.getElementById("enemy-hp-bar-inner").style.width = `${Math.max(hpPercent, 0)}%`;
-    document.getElementById("enemy-hp-text").innerText = `${Math.max(currentEnemy.hp, 0)} / ${currentEnemy.maxHp}`;
-    document.getElementById("enemy-condition-text").innerText = currentEnemy.conditionText;
+    const hpContainer = document.getElementById("enemy-hp-bar-outer");
+    const hpText = document.getElementById("enemy-hp-text");
+    const enemyContainer = document.getElementById("enemy-container");
+
+    if (currentEnemy.goalType === 'HP_DAMAGE' || currentEnemy.goalType === 'HP_FILTERED') {
+        hpContainer.style.display = 'block';
+        hpText.style.display = 'flex';
+        enemyContainer.classList.remove('no-hp-goal');
+        const hpPercent = (currentEnemy.hp / currentEnemy.maxHp) * 100;
+        document.getElementById("enemy-hp-bar-inner").style.width = `${Math.max(hpPercent, 0)}%`;
+        hpText.innerText = `${Math.max(currentEnemy.hp, 0)} / ${currentEnemy.maxHp}`;
+    } else {
+        hpContainer.style.display = 'none';
+        hpText.style.display = 'none';
+        enemyContainer.classList.add('no-hp-goal');
+    }
+    
+    // CORRIGIDO: Lógica de progresso
+    let conditionText = currentEnemy.originalText;
+    if (currentEnemy.goalType === 'TARGET_MERGE') {
+        let total = currentEnemy.goalValue.length; // Lê o total do original
+        let remaining = currentEnemy.targetsToHit.length; // Lê o restante da cópia
+        if (remaining < total) {
+            conditionText = `${currentEnemy.originalText} (${total - remaining}/${total})`;
+        }
+    }
+    document.getElementById("enemy-condition-text").innerText = conditionText;
 }
-// (applyDamage - sem alterações)
+
+// ALTERADO: Lógica de dano refatorada
 function applyDamage(damageValues, targetMerges) {
     if (currentEnemy.hp <= 0) return;
     let totalValidDamage = 0;
     let didResist = false;
     let instantWin = false;
+
     switch (currentEnemy.goalType) {
-        case 'HP_MERGE':
-        case 'BUILD_TILE':
+        case 'HP_DAMAGE':
+            totalValidDamage = damageValues.reduce((a, b) => a + b, 0);
+            break;
+        case 'HP_FILTERED': // Inimigo "Combine 4 ou 8 + HP"
             if (damageValues.length > 0) {
                 for (const val of damageValues) {
-                    if (currentEnemy.goalValue === null || currentEnemy.goalValue.includes(val)) {
-                        if (currentEnemy.goalType === 'BUILD_TILE') {
-                            instantWin = true;
-                        } else {
-                            totalValidDamage += val;
-                        }
+                    if (currentEnemy.goalValue.includes(val)) {
+                        totalValidDamage += val;
+                    } else {
+                        didResist = true; // Fez uma soma, mas não era a correta
+                    }
+                }
+            }
+            break;
+
+        case 'MERGE_LIST': // Ex: "Faça uma soma de 16 ou 32"
+        case 'BUILD_TILE': // Ex: "Crie um 128"
+            if (damageValues.length > 0) {
+                for (const val of damageValues) {
+                    if (currentEnemy.goalValue.includes(val)) {
+                        instantWin = true;
                     } else {
                         didResist = true;
                     }
                 }
             }
             break;
+
         case 'TARGET_MERGE':
             if (targetMerges.length > 0) {
                 for (const val of targetMerges) {
-                    if (currentEnemy.goalValue.includes(val)) {
-                        instantWin = true;
-                        break;
+                    // CORRIGIDO: Verifica e remove da lista de alvos restantes
+                    const targetIndex = currentEnemy.targetsToHit.indexOf(val);
+                    if (targetIndex > -1) {
+                        currentEnemy.targetsToHit.splice(targetIndex, 1);
                     }
+                }
+                if (currentEnemy.targetsToHit.length === 0) {
+                    instantWin = true;
                 }
             }
             if (damageValues.length > 0) didResist = true;
             break;
     }
+
     let conditionTextElement = document.getElementById("enemy-condition-text");
     if (didResist && !instantWin) {
         conditionTextElement.classList.add("condition-shake");
@@ -408,11 +470,15 @@ function applyDamage(damageValues, targetMerges) {
     } else {
         conditionTextElement.classList.remove("condition-shake");
     }
+
     scoreDisplay.innerText = totalValidDamage;
     if (totalValidDamage > 0) {
         currentEnemy.hp -= totalValidDamage;
-        updateEnemyUI();
     }
+
+    // Atualiza a UI (barra de HP ou progresso de alvos)
+    updateEnemyUI();
+
     if (instantWin || currentEnemy.hp <= 0) {
         currentEnemy.hp = 0;
         enemiesDefeated++;
@@ -428,8 +494,11 @@ function applyDamage(damageValues, targetMerges) {
     }
 }
 
+
 // --- LÓGICA DO 2048 ---
-// (updateBoardView - sem alterações)
+// (updateBoardView, spawnNumber, processMove, handleKeyInput, handleTouchStart, 
+//  handleTouchEnd, handleSwipe, boardHasTile, slide, slideLeft, slideRight, 
+//  slideUp, slideDown - todas sem alterações)
 function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTiles = []) {
     const spawnedKeys = new Set(spawnedTiles.map(t => `${t.r}-${t.c}`));
     const mergedKeys = new Set(mergedTiles.map(t => `${t.r}-${t.c}`));
@@ -474,7 +543,6 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
         }
     }
 }
-// (spawnNumber - sem alterações)
 function spawnNumber() {
     let emptyCells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] === 0) emptyCells.push({r, c});
@@ -485,12 +553,8 @@ function spawnNumber() {
     board[r][c] = value;
     return {r, c};
 }
-
-// --- LÓGICA DE MOVIMENTO ---
-// ALTERADO: Lógica de "Start Game" removida
 function processMove(slideResult, isFastMove) {
     let { hasChanged, mergedTiles, totalDamageValues, targetMerges } = slideResult;
-    
     let deletionsToApply = 0;
     if (hasChanged) {
         if (isFastMove) {
@@ -524,18 +588,13 @@ function processMove(slideResult, isFastMove) {
         scoreDisplay.innerText = 0;
     }
 }
-
-// ALTERADO: Verificação de pausa
 function handleKeyInput(e) {
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
     lastMoveTimestamp = now;
-    
-    // CORRIGIDO: Verifica se está pausado ou input bloqueado
     if (isGamePaused || isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
         return;
     }
-    
     let slideFn = null;
     switch(e.key) {
         case "ArrowLeft": slideFn = slideLeft; break;
@@ -550,31 +609,23 @@ function handleKeyInput(e) {
     }
     processMove(slideResult, isFastMove);
 }
-
-// --- CONTROLE DE TOQUE ---
-// (handleTouchStart - sem alterações)
 function handleTouchStart(e) {
     e.preventDefault();
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 }
-// ALTERADO: Verificação de pausa
 function handleTouchEnd(e) {
     e.preventDefault();
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
     lastMoveTimestamp = now;
-    
-    // CORRIGIDO: Verifica se está pausado ou input bloqueado
     if (isGamePaused || isInputLocked || currentEnemy.hp <= 0 || document.getElementById("game-over-overlay").classList.contains("visible") || gameWon) {
         return;
     }
-    
     let touchEndX = e.changedTouches[0].clientX;
     let touchEndY = e.changedTouches[0].clientY;
     handleSwipe(touchEndX, touchEndY, isFastMove);
 }
-// (handleSwipe - sem alterações)
 function handleSwipe(endX, endY, isFastMove) {
     let deltaX = endX - touchStartX;
     let deltaY = endY - touchStartY;
@@ -599,7 +650,6 @@ function handleSwipe(endX, endY, isFastMove) {
         processMove(slideResult, isFastMove);
     }
 }
-// (boardHasTile - sem alterações)
 function boardHasTile(value) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -610,9 +660,6 @@ function boardHasTile(value) {
     }
     return false;
 }
-
-// --- Funções de Slide ---
-// (slide, slideLeft, slideRight, slideUp, slideDown - sem alterações)
 function slide(row) {
     let newRow = new Array(cols).fill(0);
     let mergedIndices = [];
@@ -750,9 +797,7 @@ function showGameOverOverlay(message) {
     isGamePaused = true;
     checkAndSaveHighScore();
 }
-// CORRIGIDO: Verificação de Fim de Jogo
 function checkGameOver() {
-    // Não verifica se o overlay já está visível
     if (gameWon || document.getElementById("game-over-overlay").classList.contains("visible")) { 
         return; 
     }
