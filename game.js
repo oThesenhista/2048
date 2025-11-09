@@ -34,16 +34,21 @@ let currentEnemy;
 let scoreDisplay = document.getElementById("score");
 let enemiesDisplay = document.getElementById("enemies-defeated");
 
-// ... (Variáveis de Ataque, Timers, etc.) ...
+// --- VARIÁVEIS DE ATAQUE ---
 let blockAttackTimer = null;
 let deleteAttackTimer = null;
-const BLOCK_INTERVAL_START = 6000;
+let burnTimer = null;
+
+const BLOCK_INTERVAL_START = 12000;
 const DELETE_DELAY_MIN_START = 15000;
 const DELETE_DELAY_MAX_START = 45000;
-const BLOCK_DURATION_START = 3000;
+const BURN_INTERVAL_START = 30000;
+const BLOCK_DURATION = 2000;
+
 let currentBlockInterval;
 let currentDeleteMin;
 let currentDeleteMax;
+let currentBurnInterval;
 let currentBlockDuration;
 let blockedSlots = [];
 let maxBlocks = 1;
@@ -96,12 +101,14 @@ function togglePause() {
     if (isGamePaused) {
         clearBlockTimer();
         clearDeleteTimer();
+        clearBurnTimer();
         setPauseOverlay(true);
         pauseButton.innerText = "▶";
     } else {
         setPauseOverlay(false);
         startBlockTimer();
         scheduleDeleteAttack();
+        startBurnTimer();
         pauseButton.innerText = "II";
     }
 }
@@ -122,14 +129,26 @@ function checkAndSaveHighScore() {
 // --- FUNÇÕES DE TIMER DE ATAQUE ---
 function clearBlockTimer() { if (blockAttackTimer) { clearInterval(blockAttackTimer); blockAttackTimer = null; } }
 function clearDeleteTimer() { if (deleteAttackTimer) { clearTimeout(deleteAttackTimer); deleteAttackTimer = null; } }
+function clearBurnTimer() { if (burnTimer) { clearInterval(burnTimer); burnTimer = null; } }
+
 function startBlockTimer() {
     clearBlockTimer();
-    blockAttackTimer = setInterval(blockSlotAttack, currentBlockInterval);
+    if (currentEnemy.canBlock) {
+        blockAttackTimer = setInterval(blockSlotAttack, currentBlockInterval);
+    }
 }
 function scheduleDeleteAttack() {
     clearDeleteTimer();
-    const delay = Math.random() * (currentDeleteMax - currentDeleteMin) + currentDeleteMin;
-    deleteAttackTimer = setTimeout(deletePieceAttack, delay);
+    if (currentEnemy.canDelete) {
+        const delay = Math.random() * (currentDeleteMax - currentDeleteMin) + currentDeleteMin;
+        deleteAttackTimer = setTimeout(deletePieceAttack, delay);
+    }
+}
+function startBurnTimer() {
+    clearBurnTimer();
+    if (currentEnemy.canBurn) {
+        burnTimer = setInterval(applyBurnDamage, currentBurnInterval);
+    }
 }
 
 // --- FUNÇÕES DE ATAQUE ---
@@ -142,7 +161,7 @@ function blockSlotAttack() {
     const newBlockedSlot = { r, c, value: board[r][c] };
     blockedSlots.push(newBlockedSlot);
     board[r][c] = -1;
-    updateBoardView([], [], [], [newBlockedSlot]); 
+    updateBoardView([], [], [], [newBlockedSlot], []);
     setTimeout(() => unblockSlot(newBlockedSlot), currentBlockDuration); 
 }
 function deletePieceAttack() {
@@ -154,10 +173,9 @@ function unblockSlot(slotToUnblock) {
     const {r, c, value} = slotToUnblock;
     if (board[r][c] === -1) board[r][c] = value;
     blockedSlots = blockedSlots.filter(s => s.r !== r || s.c !== c);
-    updateBoardView([], [], [], []);
+    updateBoardView([], [], [], [], []);
 }
 
-// (Função selectTileToPunish - sem alterações)
 function selectTileToPunish(boardState) {
     let buckets = { low: [], mid: [], high: [], epic: [] };
     for (let r = 0; r < rows; r++) {
@@ -187,7 +205,6 @@ function selectTileToPunish(boardState) {
     }
     return chosenBucket[Math.floor(Math.random() * chosenBucket.length)];
 }
-// (applyPunishmentDeletions - sem alterações)
 function applyPunishmentDeletions(count, onCompleteCallback) {
     if (isInputLocked || isGamePaused || currentEnemy.hp <= 0 || count <= 0) {
         if (onCompleteCallback) onCompleteCallback();
@@ -214,7 +231,7 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
         return;
     }
     document.getElementById("game-board").classList.add("shake");
-    updateBoardView([], [], tilesToDelete, []); 
+    updateBoardView([], [], tilesToDelete, [], []); 
     setTimeout(() => {
         for (const tile of tilesToDelete) {
             if (board[tile.r][tile.c] > 0) {
@@ -223,10 +240,55 @@ function applyPunishmentDeletions(count, onCompleteCallback) {
         }
         isInputLocked = false;
         document.getElementById("game-board").classList.remove("shake");
-        updateBoardView([], [], [], []);
+        updateBoardView([], [], [], [], []);
         if (onCompleteCallback) onCompleteCallback();
         checkGameOver();
     }, 600);
+}
+
+// ALTERADO: Lógica de queimadura (fade out / fade in)
+function applyBurnDamage() {
+    if (isInputLocked || isGamePaused || currentEnemy.hp <= 0) return;
+    
+    let targets = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c] >= 16) {
+                targets.push({r, c});
+            }
+        }
+    }
+    if (targets.length === 0) return;
+
+    isInputLocked = true;
+    
+    let tilesToBurn = [];
+    
+    // CORRIGIDO: Ataca apenas 1 peça
+    const targetCount = 1;
+    
+    for (let i = 0; i < targetCount; i++) {
+         if (targets.length === 0) break;
+         let randIndex = Math.floor(Math.random() * targets.length);
+         let tile = targets.splice(randIndex, 1)[0];
+         tilesToBurn.push(tile);
+    }
+
+    updateBoardView([], [], [], [], tilesToBurn); 
+
+    setTimeout(() => {
+        let spawnedAfterBurn = [];
+        for (const tile of tilesToBurn) {
+            let newValue = board[tile.r][tile.c] / 2;
+            board[tile.r][tile.c] = newValue;
+            if (newValue > 0) {
+                spawnedAfterBurn.push({r: tile.r, c: tile.c});
+            }
+        }
+        isInputLocked = false;
+        updateBoardView(spawnedAfterBurn, [], [], [], []);
+        checkGameOver();
+    }, 1400);
 }
 
 
@@ -235,12 +297,12 @@ function restartGame() {
     enemiesDefeated = 0;
     clearBlockTimer();
     clearDeleteTimer();
+    clearBurnTimer();
     lastMoveTimestamp = 0;
     maxBlocks = 1;
     noMergeStreak = 0;
     resetLevel();
 }
-// (resetLevel - sem alterações)
 function resetLevel() {
     board = [ [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0] ];
     gameWon = false;
@@ -248,26 +310,32 @@ function resetLevel() {
     enemiesDisplay.innerText = enemiesDefeated;
     clearBlockTimer();
     clearDeleteTimer();
+    clearBurnTimer();
     blockedSlots = [];
     isInputLocked = false;
     noMergeStreak = 0;
     isGamePaused = false; 
+    
     const speedFactor = Math.pow(0.95, enemiesDefeated);
     maxBlocks = Math.min(3, 1 + Math.floor(enemiesDefeated / 4));
-    if (maxBlocks === 1) currentBlockDuration = BLOCK_DURATION_START;
-    else if (maxBlocks === 2) currentBlockDuration = 2500;
-    else currentBlockDuration = 2000;
-    currentBlockInterval = Math.max(2000, BLOCK_INTERVAL_START * speedFactor);
+    
+    currentBlockDuration = BLOCK_DURATION; 
+    
+    currentBlockInterval = Math.max(5000, BLOCK_INTERVAL_START * speedFactor);
     currentDeleteMin = Math.max(10000, DELETE_DELAY_MIN_START * speedFactor);
     currentDeleteMax = Math.max(15000, DELETE_DELAY_MAX_START * speedFactor);
+    currentBurnInterval = Math.max(10000, BURN_INTERVAL_START * speedFactor);
+    
     document.getElementById("game-over-overlay").classList.remove("visible");
     document.getElementById("game-over-overlay").classList.add("hidden");
     pauseButton.innerText = "II";
     document.getElementById("enemy-defeated-overlay").classList.remove("visible");
     document.getElementById("enemy-condition-text").classList.remove("condition-shake");
+    
     loadLocalHighScore();
     spawnNewEnemy();
     updateEnemyUI();
+    
     const gameBoard = document.getElementById("game-board");
     gameBoard.innerHTML = ""; 
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
@@ -276,24 +344,27 @@ function resetLevel() {
         cell.id = `grid-cell-${r}-${c}`; 
         gameBoard.append(cell);
     }
+    
     document.removeEventListener("keyup", handleKeyInput);
     document.addEventListener("keyup", handleKeyInput);
     gameBoard.removeEventListener('touchstart', handleTouchStart);
     gameBoard.addEventListener('touchstart', handleTouchStart, { passive: false });
     gameBoard.removeEventListener('touchend', handleTouchEnd);
     gameBoard.addEventListener('touchend', handleTouchEnd, { passive: false });
+    
     let spawned1 = spawnNumber();
     let spawned2 = spawnNumber();
-    updateBoardView([spawned1, spawned2], [], [], []);
+    updateBoardView([spawned1, spawned2], [], [], [], []);
+    
     startBlockTimer();
     scheduleDeleteAttack();
+    startBurnTimer();
 }
 
-// --- Grupos de Desafio (ALTERADO) ---
+// --- Grupos de Desafio ---
 const challengePools = {
     easy: [
         { hp: 64, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 64 de dano" },
-        // CORRIGIDO: Era 'MERGE_LIST' (vitória instantânea), agora é 'HP_FILTERED'
         { hp: 64, goalType: 'HP_FILTERED', goalValue: [4, 8], text: "Condição: Cause 64 de dano (Apenas 4, 8)" },
         { hp: 128, goalType: 'HP_DAMAGE', goalValue: null, text: "Condição: Cause 128 de dano" },
         { hp: 1, goalType: 'TARGET_MERGE', goalValue: [16], text: "Condição: Combine com o 16" },
@@ -323,15 +394,18 @@ const challengePools = {
     ],
     boss_4: { hp: 1, goalType: 'BUILD_TILE', goalValue: [1024], text: "CHEFE: Crie um 1024!" }
 };
+// (pickRandom - sem alterações)
 function pickRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
 }
-
-// ALTERADO: Adiciona 'targetsToHit'
+// (spawnNewEnemy - sem alterações)
 function spawnNewEnemy() {
     let name = `Inimigo Nível ${enemiesDefeated + 1}`;
     let enemyRules;
+    let isBoss = false;
+    
     if ((enemiesDefeated + 1) % 10 === 0) {
+        isBoss = true;
         const bossLevel = (enemiesDefeated + 1) / 10;
         if (bossLevel === 1) enemyRules = challengePools.boss_1;
         else if (bossLevel === 2) enemyRules = challengePools.boss_2;
@@ -352,6 +426,9 @@ function spawnNewEnemy() {
     if (enemyRules.goalType !== 'HP_DAMAGE' && enemyRules.goalType !== 'HP_FILTERED') {
         finalHP = 1;
     }
+    
+    let canBurn = isBoss || enemiesDefeated >= 4; 
+
     currentEnemy = {
         name: name,
         hp: finalHP,
@@ -359,11 +436,14 @@ function spawnNewEnemy() {
         goalType: enemyRules.goalType,
         goalValue: enemyRules.goalValue,
         originalText: enemyRules.text,
-        // CORRIGIDO: Cria uma cópia do array de alvos para podermos modificá-lo
         targetsToHit: (enemyRules.goalType === 'TARGET_MERGE') ? [...enemyRules.goalValue] : [],
+        isBoss: isBoss,
+        canBlock: true,
+        canDelete: true,
+        canBurn: canBurn
     };
     if (currentEnemy.goalType === 'TARGET_MERGE') {
-        currentEnemy.targetsToHit.forEach(value => { // Usa a cópia
+        currentEnemy.targetsToHit.forEach(value => {
             placeStaticTile(value);
         });
     }
@@ -378,13 +458,11 @@ function placeStaticTile(value) {
         board[r][c] = -value; 
     }
 }
-
-// ALTERADO: Atualiza o progresso do alvo
+// (updateEnemyUI - sem alterações)
 function updateEnemyUI() {
     const hpContainer = document.getElementById("enemy-hp-bar-outer");
     const hpText = document.getElementById("enemy-hp-text");
     const enemyContainer = document.getElementById("enemy-container");
-
     if (currentEnemy.goalType === 'HP_DAMAGE' || currentEnemy.goalType === 'HP_FILTERED') {
         hpContainer.style.display = 'block';
         hpText.style.display = 'flex';
@@ -397,44 +475,39 @@ function updateEnemyUI() {
         hpText.style.display = 'none';
         enemyContainer.classList.add('no-hp-goal');
     }
-    
-    // CORRIGIDO: Lógica de progresso
     let conditionText = currentEnemy.originalText;
     if (currentEnemy.goalType === 'TARGET_MERGE') {
-        let total = currentEnemy.goalValue.length; // Lê o total do original
-        let remaining = currentEnemy.targetsToHit.length; // Lê o restante da cópia
+        let total = currentEnemy.goalValue.length;
+        let remaining = currentEnemy.targetsToHit.length;
         if (remaining < total) {
             conditionText = `${currentEnemy.originalText} (${total - remaining}/${total})`;
         }
     }
     document.getElementById("enemy-condition-text").innerText = conditionText;
 }
-
-// ALTERADO: Lógica de dano refatorada
+// (applyDamage - sem alterações)
 function applyDamage(damageValues, targetMerges) {
     if (currentEnemy.hp <= 0) return;
     let totalValidDamage = 0;
     let didResist = false;
     let instantWin = false;
-
     switch (currentEnemy.goalType) {
         case 'HP_DAMAGE':
             totalValidDamage = damageValues.reduce((a, b) => a + b, 0);
             break;
-        case 'HP_FILTERED': // Inimigo "Combine 4 ou 8 + HP"
+        case 'HP_FILTERED':
             if (damageValues.length > 0) {
                 for (const val of damageValues) {
                     if (currentEnemy.goalValue.includes(val)) {
                         totalValidDamage += val;
                     } else {
-                        didResist = true; // Fez uma soma, mas não era a correta
+                        didResist = true;
                     }
                 }
             }
             break;
-
-        case 'MERGE_LIST': // Ex: "Faça uma soma de 16 ou 32"
-        case 'BUILD_TILE': // Ex: "Crie um 128"
+        case 'MERGE_LIST':
+        case 'BUILD_TILE':
             if (damageValues.length > 0) {
                 for (const val of damageValues) {
                     if (currentEnemy.goalValue.includes(val)) {
@@ -445,11 +518,9 @@ function applyDamage(damageValues, targetMerges) {
                 }
             }
             break;
-
         case 'TARGET_MERGE':
             if (targetMerges.length > 0) {
                 for (const val of targetMerges) {
-                    // CORRIGIDO: Verifica e remove da lista de alvos restantes
                     const targetIndex = currentEnemy.targetsToHit.indexOf(val);
                     if (targetIndex > -1) {
                         currentEnemy.targetsToHit.splice(targetIndex, 1);
@@ -462,7 +533,6 @@ function applyDamage(damageValues, targetMerges) {
             if (damageValues.length > 0) didResist = true;
             break;
     }
-
     let conditionTextElement = document.getElementById("enemy-condition-text");
     if (didResist && !instantWin) {
         conditionTextElement.classList.add("condition-shake");
@@ -470,20 +540,17 @@ function applyDamage(damageValues, targetMerges) {
     } else {
         conditionTextElement.classList.remove("condition-shake");
     }
-
     scoreDisplay.innerText = totalValidDamage;
     if (totalValidDamage > 0) {
         currentEnemy.hp -= totalValidDamage;
     }
-
-    // Atualiza a UI (barra de HP ou progresso de alvos)
     updateEnemyUI();
-
     if (instantWin || currentEnemy.hp <= 0) {
         currentEnemy.hp = 0;
         enemiesDefeated++;
         clearBlockTimer();
         clearDeleteTimer();
+        clearBurnTimer();
         isInputLocked = true;
         document.getElementById("enemy-defeated-text").innerText = `${currentEnemy.name} Derrotado!`;
         document.getElementById("enemy-defeated-overlay").classList.add("visible");
@@ -494,16 +561,14 @@ function applyDamage(damageValues, targetMerges) {
     }
 }
 
-
 // --- LÓGICA DO 2048 ---
-// (updateBoardView, spawnNumber, processMove, handleKeyInput, handleTouchStart, 
-//  handleTouchEnd, handleSwipe, boardHasTile, slide, slideLeft, slideRight, 
-//  slideUp, slideDown - todas sem alterações)
-function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTiles = []) {
+// (updateBoardView - sem alterações)
+function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTiles = [], burnedTiles = []) {
     const spawnedKeys = new Set(spawnedTiles.map(t => `${t.r}-${t.c}`));
     const mergedKeys = new Set(mergedTiles.map(t => `${t.r}-${t.c}`));
     const deletedKeys = new Set(deletedTiles.map(t => `${t.r}-${t.c}`));
     const blockedKeys = new Set(blockedTiles.map(t => `${t.r}-${t.c}`));
+    const burnedKeys = new Set(burnedTiles.map(t => `${t.r}-${t.c}`));
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const cell = document.getElementById(`grid-cell-${r}-${c}`);
@@ -516,6 +581,7 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
                 tile.innerText = value;
                 const key = `${r}-${c}`;
                 if (deletedKeys.has(key)) { tile.classList.add("tile-deleted"); } 
+                else if (burnedKeys.has(key)) { tile.classList.add("tile-burned"); }
                 else {
                     if (spawnedKeys.has(key)) tile.classList.add("tile-new");
                     if (mergedKeys.has(key)) tile.classList.add("tile-merged");
@@ -533,7 +599,6 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
                 let tile = document.createElement("div");
                 tile.classList.add("tile");
                 tile.classList.add("tile-blocked-style"); 
-                tile.innerText = "X";
                 const key = `${r}-${c}`;
                 if (blockedKeys.has(key)) {
                     tile.classList.add("tile-blocked");
@@ -543,6 +608,7 @@ function updateBoardView(spawnedTiles, mergedTiles, deletedTiles = [], blockedTi
         }
     }
 }
+// (spawnNumber - sem alterações)
 function spawnNumber() {
     let emptyCells = [];
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (board[r][c] === 0) emptyCells.push({r, c});
@@ -553,6 +619,9 @@ function spawnNumber() {
     board[r][c] = value;
     return {r, c};
 }
+
+// --- LÓGICA DE MOVIMENTO ---
+// (processMove - sem alterações)
 function processMove(slideResult, isFastMove) {
     let { hasChanged, mergedTiles, totalDamageValues, targetMerges } = slideResult;
     let deletionsToApply = 0;
@@ -572,14 +641,14 @@ function processMove(slideResult, isFastMove) {
             noMergeStreak = 0;
         }
         applyDamage(totalDamageValues, targetMerges);
-        updateBoardView([], mergedTiles, [], []);
+        updateBoardView([], mergedTiles, [], [], []);
         if (currentEnemy.hp > 0) {
             if (deletionsToApply > 0) {
                 applyPunishmentDeletions(deletionsToApply, null);
             }
             setTimeout(() => {
                 const spawnedTile = spawnNumber();
-                updateBoardView(spawnedTile ? [spawnedTile] : [], [], [], []);
+                updateBoardView(spawnedTile ? [spawnedTile] : [], [], [], [], []);
                 checkWin();
                 checkGameOver();
             }, 100); 
@@ -588,6 +657,7 @@ function processMove(slideResult, isFastMove) {
         scoreDisplay.innerText = 0;
     }
 }
+// (handleKeyInput - sem alterações)
 function handleKeyInput(e) {
     const now = Date.now();
     const isFastMove = (now - lastMoveTimestamp) < FAST_MOVE_THRESHOLD;
@@ -609,6 +679,7 @@ function handleKeyInput(e) {
     }
     processMove(slideResult, isFastMove);
 }
+// (handleTouchStart, handleTouchEnd, handleSwipe - sem alterações)
 function handleTouchStart(e) {
     e.preventDefault();
     touchStartX = e.touches[0].clientX;
@@ -650,6 +721,7 @@ function handleSwipe(endX, endY, isFastMove) {
         processMove(slideResult, isFastMove);
     }
 }
+// (boardHasTile - sem alterações)
 function boardHasTile(value) {
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
@@ -660,6 +732,9 @@ function boardHasTile(value) {
     }
     return false;
 }
+
+// --- Funções de Slide ---
+// (slide, slideLeft, slideRight, slideUp, slideDown - sem alterações)
 function slide(row) {
     let newRow = new Array(cols).fill(0);
     let mergedIndices = [];
@@ -794,6 +869,7 @@ function showGameOverOverlay(message) {
     overlay.classList.add("visible");
     clearBlockTimer();
     clearDeleteTimer();
+    clearBurnTimer();
     isGamePaused = true;
     checkAndSaveHighScore();
 }

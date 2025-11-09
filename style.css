@@ -283,7 +283,14 @@ h1 {
 @keyframes condition-shake { 0% { transform: scale(1); color: #f63b4e; } 25% { transform: translateX(-5px) scale(1.1); } 50% { transform: translateX(5px) scale(1.1); } 75% { transform: translateX(-5px) scale(1.1); } 100% { transform: scale(1); color: #f65e3b; } }
 
 /* --- Estilo do Bloco Atacado --- */
-.tile-blocked-style { background-color: var(--color-static-blocked); color: #faf8ef; font-size: 60px; }
+.tile-blocked-style { 
+    background-color: var(--color-static-blocked); 
+    color: #faf8ef;
+    background-image: url('img/block.svg');
+    background-size: 60%;
+    background-position: center;
+    background-repeat: no-repeat;
+}
 .tile-blocked { animation: block 0.2s ease-out; }
 @keyframes block { from { transform: rotate(0deg) scale(0.5); } to { transform: rotate(180deg) scale(1); } }
 
@@ -364,16 +371,41 @@ input:checked + .slider:before {
     border-radius: 50%;
 }
 
-/* NOVO: Esconde a barra de HP para objetivos sem HP */
+/* --- Esconde a barra de HP para objetivos sem HP --- */
 .no-hp-goal #enemy-hp-bar-outer {
     display: none;
 }
 .no-hp-goal #enemy-hp-text {
     display: none;
 }
-/* Alinha o texto da condição quando a barra de HP some */
 .no-hp-goal #enemy-condition-text {
     margin-top: 0;
-    padding-top: 15px; /* Adiciona o padding que a barra de HP tinha */
+    padding-top: 15px;
     padding-bottom: 15px;
+}
+
+/* --- ALTERADO: Animação de Queimadura --- */
+.tile-burned {
+    /* Esta animação aplica-se à PEÇA ANTIGA (ex: o 16) */
+    animation: burn-anim 1.4s ease-out forwards;
+}
+@keyframes burn-anim {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+        background-color: #5F0D1C; /* Cor de queimadura */
+        background-image: url('img/fire.svg');
+        background-size: 80%;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
+    100% {
+        transform: scale(1.8); /* Expande */
+        opacity: 0; /* Desaparece */
+        background-color: #5F0D1C;
+        background-image: url('img/fire.svg');
+        background-size: 80%;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
 }
