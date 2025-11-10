@@ -30,6 +30,10 @@ body {
     --color-static-32: #9c7bcc;
     --color-static-64: #d359cb;
     --color-static-blocked: #1a1b24;
+    --color-static-frozen: #82d8d8;
+    --color-static-frozen-text: #2c4a4a;
+    --color-static-ghost: rgba(200, 200, 220, 0.2);
+    --color-static-ghost-text: rgba(240, 240, 250, 0.5);
 }
 
 body.dark-theme {
@@ -50,6 +54,10 @@ body.dark-theme {
     --color-tile-4: #59598f;
     --color-tile-text-dark: #f9f6f2;
     --color-static-blocked: #131318;
+    --color-static-frozen: #497d7d;
+    --color-static-frozen-text: #e1fafa;
+    --color-static-ghost: rgba(40, 40, 60, 0.2);
+    --color-static-ghost-text: rgba(100, 100, 120, 0.5);
 }
 /* --- FIM DAS Variáveis --- */
 
@@ -259,8 +267,12 @@ h1 {
 .tile-merged { animation: merge 0.2s ease; }
 @keyframes merge { from { transform: scale(1); } 50% { transform: scale(1.2); } to { transform: scale(1); } }
 
-.tile-deleted { background-color: #f63b4e !important; color: #f9f6f2 !important; animation: delete-anim 1.4s ease-out forwards; }
-@keyframes delete-anim { from { transform: scale(1); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+/* CORREÇÃO: Animação de deleção reduzida para 0.4s */
+.tile-deleted { background-color: #f63b4e !important; color: #f9f6f2 !important; animation: delete-anim 0.4s ease-out forwards; }
+@keyframes delete-anim { from { transform: scale(1); opacity: 1; z-index: 1;} to { transform: scale(1.8); opacity: 0; z-index: 99; } }
+
+.tile-shuffled { animation: shuffle-anim 0.4s ease; }
+@keyframes shuffle-anim { 0% { transform: scale(0.5) rotate(-180deg); } 100% { transform: scale(1) rotate(0deg); } }
 
 .shake { animation: shake 0.4s ease-in-out; }
 @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-5px); } 100% { transform: translateX(0); } }
@@ -384,28 +396,106 @@ input:checked + .slider:before {
     padding-bottom: 15px;
 }
 
-/* --- ALTERADO: Animação de Queimadura --- */
+/* --- Animação de Queimadura --- */
 .tile-burned {
-    /* Esta animação aplica-se à PEÇA ANTIGA (ex: o 16) */
-    animation: burn-anim 1.4s ease-out forwards;
+    animation: burn-anim 0.8s ease-in-out; 
 }
 @keyframes burn-anim {
     0% {
         transform: scale(1);
         opacity: 1;
-        background-color: #5F0D1C; /* Cor de queimadura */
+        background-color: var(--color-grid-bg);
         background-image: url('img/fire.svg');
-        background-size: 80%;
+        background-size: 100%;
         background-position: center;
         background-repeat: no-repeat;
+        font-size: 0%;
     }
     100% {
-        transform: scale(1.8); /* Expande */
+        transform: scale(1.05); /* Expande */
         opacity: 0; /* Desaparece */
-        background-color: #5F0D1C;
+        background-color: var(--color-grid-bg);
         background-image: url('img/fire.svg');
-        background-size: 80%;
+        background-size: 100%;
         background-position: center;
         background-repeat: no-repeat;
+        font-size: 0%;
     }
+}
+
+/* --- Estilos de Congelado (NOVO) --- */
+.tile-frozen-style {
+    background-color: transparent !important; /* Torna o fundo transparente */
+    color: var(--color-text-secondary); /* Volta a cor padrão do texto (ou a que você preferir) */
+    background-image: url('img/snow.svg'); /* Use o caminho para sua imagem */
+    background-size: 120%; /* Faz a imagem cobrir toda a área da peça */
+    background-position: center;
+    background-repeat: no-repeat;
+    border: none !important; /* Remove qualquer borda que o congelado original pudesse ter */
+    
+    /* ANIMAÇÃO DE BRILHO PULSANTE ADICIONADA */
+    animation: frost-pulse 2.5s infinite ease-in-out;
+}
+
+/* ANIMAÇÃO DE HIT (TREMIDA/BOUNCE) */
+.tile-frozen-hit {
+    animation: frozen-hit-shake 0.15s ease-out; /* Duração reduzida */
+}
+
+
+/* --- Estilos de Fantasma (NOVO) --- */
+.tile-ghost-style {
+    background-color: var(--color-static-ghost);
+    color: var(--color-static-ghost-text);
+    border: 3px dashed var(--color-static-ghost-text);
+    box-shadow: none;
+}
+.tile-ghost-new { animation: spawn 0.2s ease; }
+
+/* --- Estilos de Debug (OCULTO) --- */
+.debug-container {
+    display: none; /* CORREÇÃO: Oculta os botões de debug */
+    width: 95%;
+    max-width: 430px;
+    margin: 20px auto;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+}
+.debug-btn {
+    padding: 8px;
+    font-size: 0.8rem;
+    background-color: var(--color-enemy-hp-bar);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.debug-btn:hover {
+    background-color: var(--color-enemy-hp-fill);
+}
+#debug-win-level {
+    grid-column: 1 / -1; /* Ocupa a linha inteira */
+    background-color: #30d588;
+}
+
+/* --- Keyframe para o Brilho Congelado (AJUSTADO) --- */
+@keyframes frost-pulse {
+    0% {
+        box-shadow: 0 0 2px 1px rgba(170, 220, 255, 0.2); /* Mais fraco, azulado */
+    }
+    50% {
+        box-shadow: 0 0 5px 2px rgba(170, 220, 255, 0.4); /* Mais fraco, azulado */
+    }
+    100% {
+        box-shadow: 0 0 2px 1px rgba(170, 220, 255, 0.2); /* Mais fraco, azulado */
+    }
+}
+
+/* --- Keyframe para o Hit Congelado (AJUSTADO) --- */
+@keyframes frozen-hit-shake {
+    0% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(-1px, 0) scale(1.02); } /* Mais sutil */
+    50% { transform: translate(1px, 0) scale(1.02); }
+    75% { transform: translate(-1px, 0) scale(1.02); }
+    100% { transform: translate(0, 0) scale(1); }
 }
